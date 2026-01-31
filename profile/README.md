@@ -8,8 +8,8 @@ We build machine-readable encodings of statutes, regulations, and policy rules �
 
 | Project | Description |
 |---------|-------------|
-| [**rac**](https://github.com/RulesFoundation/rac) | Rules as Code — DSL for encoding statutes with legal citations and temporal versioning |
 | [**arch**](https://github.com/RulesFoundation/arch) | Foundational archive of government source files (statutes, IRS guidance, microdata) |
+| [**rac**](https://github.com/RulesFoundation/rac) | Rules as Code — DSL for encoding statutes with legal citations and temporal versioning |
 | [**autorac**](https://github.com/RulesFoundation/autorac) | AI-powered statute encoding with validation against PolicyEngine and TAXSIM |
 
 ## Jurisdiction encodings
