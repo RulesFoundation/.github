@@ -22,7 +22,7 @@ on:
         description: Space-separated repository roots containing RuleSpec YAML.
         required: false
         type: string
-        default: "statutes regulation policy"
+        default: "statutes regulations policies"
       run-pytest:
         description: Whether to run pytest when the repository has a tests directory.
         required: false

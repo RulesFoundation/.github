@@ -36,6 +36,9 @@ jobs:
     uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@main
 ```
 
+By default, the workflow validates RuleSpec YAML under `statutes/`,
+`regulations/`, and `policies/`.
+
 ## Links
 
 - https://axiom-foundation.org
