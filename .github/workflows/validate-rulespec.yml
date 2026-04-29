@@ -129,6 +129,16 @@ jobs:
             find tests -type f -name "*.yaml" 2>/dev/null || true
           )
 
+          while IFS= read -r path; do
+            legacy+=("$path")
+          done < <(
+            find . \
+              \( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache \
+                 -o -path ./.github -o -path ./statutes -o -path ./regulations \
+                 -o -path ./policies -o -path ./sources \) -prune \
+              -o -type f \( -name "*.yaml" -o -name "*.yml" \) -print
+          )
+
           if [ "${#legacy[@]}" -ne 0 ]; then
             printf 'Legacy repository layout is not allowed. Use RuleSpec YAML under statutes/, regulations/, or policies/.\n' >&2
             printf '%s\n' "${legacy[@]}" >&2
