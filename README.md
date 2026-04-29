@@ -2,24 +2,39 @@
 
 **The world's rules, encoded.**
 
-We build open, machine-readable encodings of statutes, regulations, and policy rules — ground truth for AI systems, verifiable by design.
+Axiom builds open, machine-readable encodings of statutes, regulations, and
+policy rules. The durable surface is RuleSpec YAML plus normalized law data; the
+tooling is designed for transparent review, deterministic tests, and compiler
+validation.
 
-## Core projects
+## Core Projects
 
 | Project | Description |
-|---------|-------------|
-| [**atlas**](https://github.com/TheAxiomFoundation/atlas) | Comprehensive map of government legal sources (statutes, regulations, IRS guidance) |
-| [**rac**](https://github.com/TheAxiomFoundation/rac) | Rules as Code — DSL for encoding statutes with legal citations and temporal versioning |
-| [**autorac**](https://github.com/TheAxiomFoundation/autorac) | AI-powered statute encoding with validation against PolicyEngine and TAXSIM |
+| --- | --- |
+| [axiom-foundation.org](https://github.com/TheAxiomFoundation/axiom-foundation.org) | Axiom website and app for navigating encoded law. |
+| [axiom-rules](https://github.com/TheAxiomFoundation/axiom-rules) | RuleSpec compiler and runtime. |
+| [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-assisted RuleSpec encoding and validation tooling. |
+| [axiom-scrapers](https://github.com/TheAxiomFoundation/axiom-scrapers) | Ingestion tooling for collecting and normalizing legal source text. |
 
-## Jurisdiction encodings
+## Rule Repositories
 
 | Repo | Coverage |
-|------|----------|
-| [rac-us](https://github.com/TheAxiomFoundation/rac-us) | US federal tax and benefit rules |
-| [rac-us-ca](https://github.com/TheAxiomFoundation/rac-us-ca) | California |
-| [rac-us-ny](https://github.com/TheAxiomFoundation/rac-us-ny) | New York |
-| [rac-ca](https://github.com/TheAxiomFoundation/rac-ca) | Canada |
+| --- | --- |
+| [rules-us](https://github.com/TheAxiomFoundation/rules-us) | United States federal rules. |
+| [rules-us-ca](https://github.com/TheAxiomFoundation/rules-us-ca) | California rules. |
+| [rules-us-ny](https://github.com/TheAxiomFoundation/rules-us-ny) | New York rules. |
+| [rules-ca](https://github.com/TheAxiomFoundation/rules-ca) | Canada rules. |
+
+## Shared CI
+
+Jurisdiction rule repositories should keep a small local `validate` workflow that
+calls the centralized reusable workflow in this repository:
+
+```yaml
+jobs:
+  validate:
+    uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@main
+```
 
 ## Links
 
