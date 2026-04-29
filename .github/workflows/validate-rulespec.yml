@@ -86,7 +86,7 @@ jobs:
         if: ${{ inputs.run-pytest }}
         run: |
           if [ -d tests ]; then
-            python -m pytest -q
+            python -m pytest -q tests
           else
             echo "No tests directory found; skipping pytest."
           fi
