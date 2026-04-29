@@ -39,6 +39,10 @@ jobs:
 By default, the workflow validates RuleSpec YAML under `statutes/`,
 `regulations/`, and `policies/`.
 
+The workflow rejects legacy `statute/`, `regulation/`, and `policy/` roots,
+old `parameters.yaml` / `tests.yaml` artifacts, YAML fixtures under `tests/`,
+and obsolete generated `.rac` artifacts.
+
 ## Links
 
 - https://axiom-foundation.org

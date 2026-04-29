@@ -102,6 +102,39 @@ jobs:
             exit 1
           fi
 
+      - name: Reject legacy repository layout
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          legacy=()
+
+          for root in statute regulation policy; do
+            if [ -e "$root" ]; then
+              legacy+=("$root/")
+            fi
+          done
+
+          while IFS= read -r path; do
+            legacy+=("$path")
+          done < <(
+            find . \
+              \( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache \) -prune \
+              -o -type f \( -name "parameters.yaml" -o -name "tests.yaml" \) -print
+          )
+
+          while IFS= read -r path; do
+            legacy+=("$path")
+          done < <(
+            find tests -type f -name "*.yaml" 2>/dev/null || true
+          )
+
+          if [ "${#legacy[@]}" -ne 0 ]; then
+            printf 'Legacy repository layout is not allowed. Use RuleSpec YAML under statutes/, regulations/, or policies/.\n' >&2
+            printf '%s\n' "${legacy[@]}" >&2
+            exit 1
+          fi
+
       - name: Validate RuleSpec YAML
         shell: bash
         env:
