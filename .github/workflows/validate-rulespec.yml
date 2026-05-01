@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: main
+      rules-us-ref:
+        description: Git ref for TheAxiomFoundation/rules-us canonical targets.
+        required: false
+        type: string
+        default: main
       validate-roots:
         description: Space-separated repository roots containing RuleSpec YAML.
         required: false
@@ -54,6 +59,13 @@ jobs:
           repository: TheAxiomFoundation/axiom-rules
           ref: ${{ inputs.axiom-rules-ref }}
           path: _axiom/axiom-rules
+
+      - name: Checkout rules-us canonical targets
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: TheAxiomFoundation/rules-us
+          ref: ${{ inputs.rules-us-ref }}
+          path: _axiom/rules-us
 
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
@@ -149,6 +161,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          AXIOM_RULE_REPO_ROOTS: ${{ github.workspace }}/_axiom/rules-us
         run: |
           set -euo pipefail
 
