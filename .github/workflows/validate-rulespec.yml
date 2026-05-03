@@ -18,6 +18,11 @@ on:
         required: false
         type: string
         default: main
+      axiom-corpus-ref:
+        description: Git ref for TheAxiomFoundation/axiom-corpus.
+        required: false
+        type: string
+        default: main
       rules-us-ref:
         description: Git ref for TheAxiomFoundation/rules-us canonical targets.
         required: false
@@ -60,6 +65,13 @@ jobs:
           ref: ${{ inputs.axiom-rules-ref }}
           path: _axiom/axiom-rules
 
+      - name: Checkout axiom-corpus
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: TheAxiomFoundation/axiom-corpus
+          ref: ${{ inputs.axiom-corpus-ref }}
+          path: _axiom/axiom-corpus
+
       - name: Checkout rules-us canonical targets
         uses: actions/checkout@v6.0.2
         with:
@@ -93,6 +105,7 @@ jobs:
       - name: Link axiom-rules as sibling checkout
         run: |
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-rules" "$GITHUB_WORKSPACE/../axiom-rules"
+          ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
 
       - name: Run repository tests
         if: ${{ inputs.run-pytest }}
