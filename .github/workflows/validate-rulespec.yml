@@ -194,3 +194,28 @@ jobs:
           for file in "${rulespec_files[@]}"; do
             axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers
           done
+
+      - name: Validate RuleSpec proofs and claims
+        shell: bash
+        env:
+          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
+        run: |
+          set -euo pipefail
+
+          mapfile -t rulespec_files < <(
+            for root in $VALIDATE_ROOTS; do
+              if [ -d "$root" ]; then
+                find "$root" -type f -name "*.yaml" ! -name "*.test.yaml"
+              fi
+            done | sort
+          )
+
+          if [ "${#rulespec_files[@]}" -eq 0 ]; then
+            echo "No RuleSpec YAML files found under: $VALIDATE_ROOTS"
+            exit 0
+          fi
+
+          for file in "${rulespec_files[@]}"; do
+            axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"
+          done
