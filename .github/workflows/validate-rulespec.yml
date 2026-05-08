@@ -103,9 +103,14 @@ jobs:
         run: cargo build --verbose
 
       - name: Link axiom-rules as sibling checkout
+        shell: bash
         run: |
+          set -euo pipefail
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-rules" "$GITHUB_WORKSPACE/../axiom-rules"
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
+          if [ "$(basename "$GITHUB_WORKSPACE")" != "rules-us" ]; then
+            ln -sfn "$GITHUB_WORKSPACE/_axiom/rules-us" "$GITHUB_WORKSPACE/../rules-us"
+          fi
 
       - name: Run repository tests
         if: ${{ inputs.run-pytest }}
@@ -219,3 +224,13 @@ jobs:
           for file in "${rulespec_files[@]}"; do
             axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"
           done
+
+      - name: Validate SNAP oracle coverage classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          axiom-encode oracle-coverage \
+            --root "$GITHUB_WORKSPACE/.." \
+            --program snap \
+            --fail-on-unmapped \
+            --limit 50
