@@ -225,12 +225,11 @@ jobs:
             axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"
           done
 
-      - name: Validate SNAP oracle coverage classification
+      - name: Validate PolicyEngine oracle coverage classification
         shell: bash
         run: |
           set -euo pipefail
           axiom-encode oracle-coverage \
             --root "$GITHUB_WORKSPACE/.." \
-            --program snap \
             --fail-on-unmapped \
             --limit 50

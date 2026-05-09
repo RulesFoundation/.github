@@ -41,8 +41,8 @@ By default, the workflow validates RuleSpec YAML under `statutes/`,
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved
-roots, obsolete generated formula artifacts, and unclassified SNAP oracle
-coverage. New executable SNAP outputs must either have an exact PolicyEngine
+roots, obsolete generated formula artifacts, and unclassified PolicyEngine
+oracle coverage. New executable outputs must either have an exact PolicyEngine
 mapping or a harness-side `not_comparable` classification with a rationale.
 
 ## Links
