@@ -232,4 +232,5 @@ jobs:
           axiom-encode oracle-coverage \
             --root "$GITHUB_WORKSPACE/.." \
             --fail-on-unmapped \
+            --fail-on-untested-comparable \
             --limit 50
