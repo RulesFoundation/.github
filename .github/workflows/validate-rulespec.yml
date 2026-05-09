@@ -50,6 +50,8 @@ jobs:
     steps:
       - name: Checkout rules repository
         uses: actions/checkout@v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Checkout axiom-encode
         uses: actions/checkout@v6.0.2
@@ -174,6 +176,28 @@ jobs:
             printf '%s\n' "${disallowed[@]}" >&2
             exit 1
           fi
+
+      - name: Reject manual RuleSpec changes
+        shell: bash
+        env:
+          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          AXIOM_ENCODE_APPLY_SIGNING_KEY: ${{ secrets.AXIOM_ENCODE_APPLY_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            base_ref="${{ github.event.before }}"
+          else
+            base_ref="HEAD~1"
+          fi
+
+          axiom-encode guard-generated \
+            --repo "$GITHUB_WORKSPACE" \
+            --base-ref "$base_ref" \
+            --head-ref "$GITHUB_SHA" \
+            --roots "$VALIDATE_ROOTS"
 
       - name: Validate RuleSpec YAML
         shell: bash

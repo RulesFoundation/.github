@@ -41,9 +41,12 @@ By default, the workflow validates RuleSpec YAML under `statutes/`,
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved
-roots, obsolete generated formula artifacts, and unclassified PolicyEngine
-oracle coverage. New executable outputs must either have an exact PolicyEngine
-mapping or a harness-side `not_comparable` classification with a rationale.
+roots, obsolete generated formula artifacts, manual RuleSpec YAML edits without
+a signed `axiom-encode --apply` manifest, and unclassified PolicyEngine oracle
+coverage. Rules repos using this workflow need the
+`AXIOM_ENCODE_APPLY_SIGNING_KEY` secret. New executable outputs must either have
+an exact PolicyEngine mapping or a harness-side `not_comparable` classification
+with a rationale.
 
 ## Links
 
