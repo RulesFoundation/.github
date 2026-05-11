@@ -247,7 +247,8 @@ jobs:
 
           axiom-encode test \
             --root "$GITHUB_WORKSPACE" \
-            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
+            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
+            $VALIDATE_ROOTS
 
       - name: Validate RuleSpec proofs and claims
         shell: bash
