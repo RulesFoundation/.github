@@ -13,8 +13,8 @@ on:
         required: false
         type: string
         default: main
-      axiom-rules-ref:
-        description: Git ref for TheAxiomFoundation/axiom-rules.
+      axiom-rules-engine-ref:
+        description: Git ref for TheAxiomFoundation/axiom-rules-engine.
         required: false
         type: string
         default: main
@@ -23,8 +23,8 @@ on:
         required: false
         type: string
         default: main
-      rules-us-ref:
-        description: Git ref for TheAxiomFoundation/rules-us canonical targets.
+      rulespec-us-ref:
+        description: Git ref for TheAxiomFoundation/rulespec-us canonical targets.
         required: false
         type: string
         default: main
@@ -60,12 +60,12 @@ jobs:
           ref: ${{ inputs.axiom-encode-ref }}
           path: _axiom/axiom-encode
 
-      - name: Checkout axiom-rules
+      - name: Checkout axiom-rules-engine
         uses: actions/checkout@v6.0.2
         with:
-          repository: TheAxiomFoundation/axiom-rules
-          ref: ${{ inputs.axiom-rules-ref }}
-          path: _axiom/axiom-rules
+          repository: TheAxiomFoundation/axiom-rules-engine
+          ref: ${{ inputs.axiom-rules-engine-ref }}
+          path: _axiom/axiom-rules-engine
 
       - name: Checkout axiom-corpus
         uses: actions/checkout@v6.0.2
@@ -74,12 +74,12 @@ jobs:
           ref: ${{ inputs.axiom-corpus-ref }}
           path: _axiom/axiom-corpus
 
-      - name: Checkout rules-us canonical targets
+      - name: Checkout rulespec-us canonical targets
         uses: actions/checkout@v6.0.2
         with:
-          repository: TheAxiomFoundation/rules-us
-          ref: ${{ inputs.rules-us-ref }}
-          path: _axiom/rules-us
+          repository: TheAxiomFoundation/rulespec-us
+          ref: ${{ inputs.rulespec-us-ref }}
+          path: _axiom/rulespec-us
 
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
@@ -89,10 +89,10 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache axiom-rules build
+      - name: Cache axiom-rules-engine build
         uses: Swatinem/rust-cache@v2.9.1
         with:
-          workspaces: _axiom/axiom-rules
+          workspaces: _axiom/axiom-rules-engine
 
       - name: Install Python dependencies
         run: |
@@ -100,18 +100,18 @@ jobs:
           python -m pip install pytest pyyaml
           python -m pip install -e _axiom/axiom-encode
 
-      - name: Build axiom-rules
-        working-directory: _axiom/axiom-rules
+      - name: Build axiom-rules-engine
+        working-directory: _axiom/axiom-rules-engine
         run: cargo build --verbose
 
-      - name: Link axiom-rules as sibling checkout
+      - name: Link axiom-rules-engine as sibling checkout
         shell: bash
         run: |
           set -euo pipefail
-          ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-rules" "$GITHUB_WORKSPACE/../axiom-rules"
+          ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" "$GITHUB_WORKSPACE/../axiom-rules-engine"
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
-          if [ "$(basename "$GITHUB_WORKSPACE")" != "rules-us" ]; then
-            ln -sfn "$GITHUB_WORKSPACE/_axiom/rules-us" "$GITHUB_WORKSPACE/../rules-us"
+          if [ "$(basename "$GITHUB_WORKSPACE")" != "rulespec-us" ]; then
+            ln -sfn "$GITHUB_WORKSPACE/_axiom/rulespec-us" "$GITHUB_WORKSPACE/../rulespec-us"
           fi
 
       - name: Run repository tests
@@ -203,7 +203,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ inputs.validate-roots }}
-          AXIOM_RULE_REPO_ROOTS: ${{ github.workspace }}/_axiom/rules-us
+          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
         run: |
           set -euo pipefail
 
