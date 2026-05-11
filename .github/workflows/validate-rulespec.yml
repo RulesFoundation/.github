@@ -224,6 +224,31 @@ jobs:
             axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers
           done
 
+      - name: Execute RuleSpec companion tests
+        shell: bash
+        env:
+          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
+        run: |
+          set -euo pipefail
+
+          mapfile -t test_files < <(
+            for root in $VALIDATE_ROOTS; do
+              if [ -d "$root" ]; then
+                find "$root" -type f -name "*.test.yaml"
+              fi
+            done | sort
+          )
+
+          if [ "${#test_files[@]}" -eq 0 ]; then
+            echo "No RuleSpec companion tests found; skipping."
+            exit 0
+          fi
+
+          axiom-encode test \
+            --root "$GITHUB_WORKSPACE" \
+            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
+
       - name: Validate RuleSpec proofs and claims
         shell: bash
         env:
