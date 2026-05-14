@@ -53,6 +53,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout shared CI scripts
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: TheAxiomFoundation/.github
+          path: _axiom/dotgithub
+
       - name: Checkout axiom-encode
         uses: actions/checkout@v6.0.2
         with:
@@ -284,3 +290,36 @@ jobs:
             --fail-on-unmapped \
             --fail-on-untested-comparable \
             --limit 50
+
+      - name: Check corpus resolution (producer/consumer naming desyncs)
+        shell: bash
+        env:
+          AXIOM_RULES_ENGINE_BINARY: ${{ github.workspace }}/_axiom/axiom-rules-engine/target/debug/axiom-rules-engine
+        run: |
+          set -euo pipefail
+          # Determine which domain(s) to check based on the caller repo name.
+          # rulespec-us → federal-only domains (e.g. snap)
+          # rules-us-co / rulespec-us-co → snap_us_co
+          # rulespec-us-ny → snap_us_ny
+          repo_name="$(basename "$GITHUB_WORKSPACE")"
+          script="$GITHUB_WORKSPACE/_axiom/dotgithub/.github/scripts/check_corpus_resolution.py"
+
+          case "$repo_name" in
+            rulespec-us)
+              python3 "$script" snap \
+                --corpus "$GITHUB_WORKSPACE"
+              ;;
+            rules-us-co|rulespec-us-co)
+              python3 "$script" snap_us_co \
+                --corpus "$GITHUB_WORKSPACE/_axiom/rulespec-us" \
+                --state-corpus "$GITHUB_WORKSPACE"
+              ;;
+            rulespec-us-ny|rules-us-ny)
+              python3 "$script" snap_us_ny \
+                --corpus "$GITHUB_WORKSPACE/_axiom/rulespec-us" \
+                --state-corpus "$GITHUB_WORKSPACE"
+              ;;
+            *)
+              echo "No corpus-resolution domain mapped for repo '$repo_name'; skipping."
+              ;;
+          esac
