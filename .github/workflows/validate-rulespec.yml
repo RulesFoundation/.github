@@ -199,6 +199,88 @@ jobs:
             --head-ref "$GITHUB_SHA" \
             --roots "$VALIDATE_ROOTS"
 
+      - name: Select RuleSpec validation targets
+        shell: bash
+        env:
+          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+        run: |
+          set -euo pipefail
+
+          rulespec_file_list="$RUNNER_TEMP/rulespec-files.txt"
+          test_file_list="$RUNNER_TEMP/rulespec-test-files.txt"
+          : > "$rulespec_file_list"
+          : > "$test_file_list"
+
+          add_existing_file() {
+            local path="$1"
+            local list="$2"
+            if [ -f "$path" ]; then
+              printf '%s\n' "$path" >> "$list"
+            fi
+          }
+
+          add_rulespec_target() {
+            local path="$1"
+            case "$path" in
+              *.test.yaml)
+                add_existing_file "$path" "$test_file_list"
+                add_existing_file "${path%.test.yaml}.yaml" "$rulespec_file_list"
+                ;;
+              *.test.yml)
+                add_existing_file "$path" "$test_file_list"
+                add_existing_file "${path%.test.yml}.yml" "$rulespec_file_list"
+                ;;
+              *.yaml)
+                add_existing_file "$path" "$rulespec_file_list"
+                add_existing_file "${path%.yaml}.test.yaml" "$test_file_list"
+                ;;
+              *.yml)
+                add_existing_file "$path" "$rulespec_file_list"
+                add_existing_file "${path%.yml}.test.yml" "$test_file_list"
+                ;;
+            esac
+          }
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+            mapfile -t changed_paths < <(
+              git diff --name-only --diff-filter=ACMRT "$base_ref" "$GITHUB_SHA" -- $VALIDATE_ROOTS
+            )
+            for path in "${changed_paths[@]}"; do
+              add_rulespec_target "$path"
+            done
+          else
+            while IFS= read -r path; do
+              add_existing_file "$path" "$rulespec_file_list"
+            done < <(
+              for root in $VALIDATE_ROOTS; do
+                if [ -d "$root" ]; then
+                  find "$root" -type f -name "*.yaml" ! -name "*.test.yaml"
+                fi
+              done
+            )
+            while IFS= read -r path; do
+              add_existing_file "$path" "$test_file_list"
+            done < <(
+              for root in $VALIDATE_ROOTS; do
+                if [ -d "$root" ]; then
+                  find "$root" -type f -name "*.test.yaml"
+                fi
+              done
+            )
+          fi
+
+          sort -u "$rulespec_file_list" -o "$rulespec_file_list"
+          sort -u "$test_file_list" -o "$test_file_list"
+
+          echo "RULESPEC_FILE_LIST=$rulespec_file_list" >> "$GITHUB_ENV"
+          echo "RULESPEC_TEST_FILE_LIST=$test_file_list" >> "$GITHUB_ENV"
+
+          echo "RuleSpec files selected:"
+          sed 's/^/- /' "$rulespec_file_list" || true
+          echo "RuleSpec companion tests selected:"
+          sed 's/^/- /' "$test_file_list" || true
+
       - name: Validate RuleSpec YAML
         shell: bash
         env:
@@ -207,16 +289,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t rulespec_files < <(
-            for root in $VALIDATE_ROOTS; do
-              if [ -d "$root" ]; then
-                find "$root" -type f -name "*.yaml" ! -name "*.test.yaml"
-              fi
-            done | sort
-          )
+          mapfile -t rulespec_files < "$RULESPEC_FILE_LIST"
 
           if [ "${#rulespec_files[@]}" -eq 0 ]; then
-            echo "No RuleSpec YAML files found under: $VALIDATE_ROOTS"
+            echo "No RuleSpec YAML files selected for validation."
             exit 0
           fi
 
@@ -232,23 +308,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t test_files < <(
-            for root in $VALIDATE_ROOTS; do
-              if [ -d "$root" ]; then
-                find "$root" -type f -name "*.test.yaml"
-              fi
-            done | sort
-          )
+          mapfile -t test_files < "$RULESPEC_TEST_FILE_LIST"
 
           if [ "${#test_files[@]}" -eq 0 ]; then
-            echo "No RuleSpec companion tests found; skipping."
+            echo "No RuleSpec companion tests selected; skipping."
             exit 0
           fi
 
           axiom-encode test \
             --root "$GITHUB_WORKSPACE" \
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
-            $VALIDATE_ROOTS
+            "${test_files[@]}"
 
       - name: Validate RuleSpec proofs and claims
         shell: bash
@@ -258,16 +328,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t rulespec_files < <(
-            for root in $VALIDATE_ROOTS; do
-              if [ -d "$root" ]; then
-                find "$root" -type f -name "*.yaml" ! -name "*.test.yaml"
-              fi
-            done | sort
-          )
+          mapfile -t rulespec_files < "$RULESPEC_FILE_LIST"
 
           if [ "${#rulespec_files[@]}" -eq 0 ]; then
-            echo "No RuleSpec YAML files found under: $VALIDATE_ROOTS"
+            echo "No RuleSpec YAML files selected for proof validation."
             exit 0
           fi
 
@@ -276,6 +340,7 @@ jobs:
           done
 
       - name: Validate PolicyEngine oracle coverage classification
+        if: ${{ github.event_name != 'pull_request' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -284,3 +349,57 @@ jobs:
             --fail-on-unmapped \
             --fail-on-untested-comparable \
             --limit 50
+
+      - name: Validate changed PolicyEngine oracle coverage classification
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -s "$RULESPEC_FILE_LIST" ]; then
+            echo "No changed RuleSpec YAML files selected for oracle coverage."
+            exit 0
+          fi
+
+          coverage_json="$RUNNER_TEMP/policyengine-oracle-coverage.json"
+          axiom-encode oracle-coverage \
+            --root "$GITHUB_WORKSPACE/.." \
+            --json > "$coverage_json"
+
+          python - "$coverage_json" "$RULESPEC_FILE_LIST" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          coverage_path = Path(sys.argv[1])
+          rulespec_file_list = Path(sys.argv[2])
+          repo = Path(os.environ["GITHUB_WORKSPACE"]).name
+          changed = {
+              f"{repo}/{line.strip()}"
+              for line in rulespec_file_list.read_text().splitlines()
+              if line.strip()
+          }
+          payload = json.loads(coverage_path.read_text())
+          items = [
+              item for item in payload.get("items", [])
+              if item.get("file") in changed
+          ]
+          failures = []
+          for item in items:
+              legal_id = item.get("legal_id")
+              if item.get("status") == "unmapped":
+                  failures.append(f"{legal_id}: unmapped")
+              elif item.get("status") == "comparable" and not item.get("tested"):
+                  failures.append(f"{legal_id}: comparable but not covered by companion tests")
+
+          if failures:
+              print("Changed PolicyEngine oracle coverage is incomplete.", file=sys.stderr)
+              for failure in failures[:50]:
+                  print(f"- {failure}", file=sys.stderr)
+              if len(failures) > 50:
+                  print(f"- ... {len(failures) - 50} more", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Changed PolicyEngine oracle coverage passed for {len(items)} output(s).")
+          PY
