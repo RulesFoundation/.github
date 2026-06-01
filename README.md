@@ -33,11 +33,33 @@ calls the centralized reusable workflow in this repository:
 ```yaml
 jobs:
   validate:
-    uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@main
+    uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@<published-validation-tag>
+    secrets: inherit
 ```
 
 By default, the workflow validates RuleSpec YAML under `statutes/`,
 `regulations/`, and `policies/`.
+
+Use a published validation workflow tag, not `main`; the first release tag for
+this rollout is expected to be `rulespec-validate-v1` after the workflow release
+PR merges.
+
+Rules repositories should pin their Axiom toolchain in `.axiom/toolchain.toml`:
+
+```toml
+[toolchain]
+axiom_encode_version = "0.1.0"
+axiom_encode_ref = "v0.1.0"
+axiom_rules_engine_ref = "v0.1.0"
+axiom_corpus_ref = "v0.1.0"
+rulespec_us_ref = "v0.1.0"
+```
+
+When this file exists, the reusable workflow rejects branch refs such as `main`
+and verifies that `axiom_encode_version` matches the checked-out
+`axiom-encode` package. Pull requests that change `.axiom/toolchain.toml` or the
+caller workflow run full RuleSpec validation rather than changed-file-only
+validation, so toolchain bumps expose every file that needs re-encoding.
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved

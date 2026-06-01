@@ -53,38 +53,198 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Resolve RuleSpec toolchain
+        id: toolchain
+        shell: bash
+        env:
+          INPUT_AXIOM_ENCODE_REF: ${{ inputs.axiom-encode-ref }}
+          INPUT_AXIOM_RULES_ENGINE_REF: ${{ inputs.axiom-rules-engine-ref }}
+          INPUT_AXIOM_CORPUS_REF: ${{ inputs.axiom-corpus-ref }}
+          INPUT_RULESPEC_US_REF: ${{ inputs.rulespec-us-ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          TOOLCHAIN_PATH = Path(".axiom/toolchain.toml")
+          FALLBACKS = {
+              "axiom_encode_ref": os.environ["INPUT_AXIOM_ENCODE_REF"],
+              "axiom_rules_engine_ref": os.environ["INPUT_AXIOM_RULES_ENGINE_REF"],
+              "axiom_corpus_ref": os.environ["INPUT_AXIOM_CORPUS_REF"],
+              "rulespec_us_ref": os.environ["INPUT_RULESPEC_US_REF"],
+          }
+          REF_RE = re.compile(r"(?:[0-9a-f]{40}|v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?)")
+
+          def fail(message: str) -> None:
+              print(f"RuleSpec toolchain error: {message}", file=sys.stderr)
+              sys.exit(1)
+
+          def load_toolchain(text: str) -> dict[str, object]:
+              payload = tomllib.loads(text)
+              if not isinstance(payload, dict):
+                  fail("toolchain file must contain a TOML table")
+              table = payload.get("toolchain", payload)
+              if not isinstance(table, dict):
+                  fail("[toolchain] must be a TOML table")
+              return table
+
+          def selected_ref(config: dict[str, object], key: str, strict: bool) -> str:
+              value = config.get(key, FALLBACKS[key])
+              if not isinstance(value, str):
+                  fail(f"{key} must be a string")
+              value = value.strip()
+              if not value:
+                  fail(f"{key} must not be empty")
+              if re.search(r"\s", value) or value.startswith(("/", "-")) or value.endswith("/") or ".." in value:
+                  fail(f"{key} has an unsafe ref value: {value!r}")
+              if strict:
+                  lowered = value.lower()
+                  if lowered in {"main", "master"} or value.startswith(("refs/heads/", "heads/")):
+                      fail(f"{key} must be a fixed tag or full commit SHA, not branch ref {value!r}")
+                  if not REF_RE.fullmatch(value):
+                      fail(f"{key} must be a release tag or full commit SHA: {value!r}")
+                  if not re.fullmatch(r"[0-9a-f]{40}", value):
+                      value = f"refs/tags/{value}"
+              return value
+
+          def semver_tuple(value: object) -> tuple[int, int, int] | None:
+              if not isinstance(value, str):
+                  return None
+              match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?", value.strip())
+              if not match:
+                  return None
+              return tuple(int(part) for part in match.groups())
+
+          def base_toolchain() -> dict[str, object] | None:
+              base_sha = os.environ.get("PR_BASE_SHA")
+              if not base_sha:
+                  return None
+              result = subprocess.run(
+                  ["git", "show", f"{base_sha}:.axiom/toolchain.toml"],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  return None
+              return load_toolchain(result.stdout)
+
+          base_config = base_toolchain()
+          config: dict[str, object] = {}
+          source = "workflow inputs"
+          strict_refs = False
+          if TOOLCHAIN_PATH.exists():
+              config = load_toolchain(TOOLCHAIN_PATH.read_text())
+              source = str(TOOLCHAIN_PATH)
+              strict_refs = True
+          elif base_config is not None:
+              fail(".axiom/toolchain.toml cannot be removed once a base branch uses it")
+
+          resolved = {
+              "axiom_encode_ref": selected_ref(config, "axiom_encode_ref", strict_refs),
+              "axiom_rules_engine_ref": selected_ref(config, "axiom_rules_engine_ref", strict_refs),
+              "axiom_corpus_ref": selected_ref(config, "axiom_corpus_ref", strict_refs),
+              "rulespec_us_ref": selected_ref(config, "rulespec_us_ref", strict_refs),
+          }
+
+          axiom_encode_version = config.get("axiom_encode_version", "")
+          if axiom_encode_version and not isinstance(axiom_encode_version, str):
+              fail("axiom_encode_version must be a string")
+          axiom_encode_version = axiom_encode_version.strip() if isinstance(axiom_encode_version, str) else ""
+
+          if TOOLCHAIN_PATH.exists() and not axiom_encode_version:
+              fail("axiom_encode_version is required when .axiom/toolchain.toml exists")
+          if TOOLCHAIN_PATH.exists() and semver_tuple(axiom_encode_version) is None:
+              fail("axiom_encode_version must be a semantic version string")
+
+          if base_config is not None:
+              base_version = semver_tuple(base_config.get("axiom_encode_version"))
+              head_version = semver_tuple(axiom_encode_version)
+              if base_version is not None and head_version is not None and head_version < base_version:
+                  fail(
+                      "axiom_encode_version must not go backwards "
+                      f"({axiom_encode_version} < {base_config.get('axiom_encode_version')})"
+                  )
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a") as output:
+              for key, value in resolved.items():
+                  print(f"{key}={value}", file=output)
+              print(f"axiom_encode_version={axiom_encode_version}", file=output)
+              print(f"source={source}", file=output)
+
+          print(f"Resolved RuleSpec toolchain from {source}:")
+          for key, value in resolved.items():
+              print(f"- {key}: {value}")
+          if axiom_encode_version:
+              print(f"- axiom_encode_version: {axiom_encode_version}")
+          PY
+
       - name: Checkout axiom-encode
         uses: actions/checkout@v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-encode
-          ref: ${{ inputs.axiom-encode-ref }}
+          ref: ${{ steps.toolchain.outputs.axiom_encode_ref }}
           path: _axiom/axiom-encode
+
+      - name: Verify axiom-encode version
+        if: ${{ steps.toolchain.outputs.axiom_encode_version != '' }}
+        shell: bash
+        env:
+          EXPECTED_AXIOM_ENCODE_VERSION: ${{ steps.toolchain.outputs.axiom_encode_version }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          expected = os.environ["EXPECTED_AXIOM_ENCODE_VERSION"]
+          pyproject = Path("_axiom/axiom-encode/pyproject.toml")
+          actual = tomllib.loads(pyproject.read_text()).get("project", {}).get("version")
+          if actual != expected:
+              print(
+                  "RuleSpec toolchain error: axiom_encode_version does not match "
+                  f"checked-out axiom-encode package version ({expected!r} != {actual!r}).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          print(f"Verified axiom-encode version {actual}.")
+          PY
 
       - name: Checkout axiom-rules-engine
         uses: actions/checkout@v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-rules-engine
-          ref: ${{ inputs.axiom-rules-engine-ref }}
+          ref: ${{ steps.toolchain.outputs.axiom_rules_engine_ref }}
           path: _axiom/axiom-rules-engine
 
       - name: Checkout axiom-corpus
         uses: actions/checkout@v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-corpus
-          ref: ${{ inputs.axiom-corpus-ref }}
+          ref: ${{ steps.toolchain.outputs.axiom_corpus_ref }}
           path: _axiom/axiom-corpus
 
       - name: Checkout rulespec-us canonical targets
         uses: actions/checkout@v6.0.2
         with:
           repository: TheAxiomFoundation/rulespec-us
-          ref: ${{ inputs.rulespec-us-ref }}
+          ref: ${{ steps.toolchain.outputs.rulespec_us_ref }}
           path: _axiom/rulespec-us
-
-      - name: Set up Python
-        uses: actions/setup-python@v6.2.0
-        with:
-          python-version: ${{ inputs.python-version }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -200,6 +360,7 @@ jobs:
             --roots "$VALIDATE_ROOTS"
 
       - name: Select RuleSpec validation targets
+        id: validation_targets
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ inputs.validate-roots }}
@@ -241,21 +402,14 @@ jobs:
             esac
           }
 
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_ref="${{ github.event.pull_request.base.sha }}"
-            mapfile -t changed_paths < <(
-              git diff --name-only --diff-filter=ACMRT "$base_ref" "$GITHUB_SHA" -- $VALIDATE_ROOTS
-            )
-            for path in "${changed_paths[@]}"; do
-              add_rulespec_target "$path"
-            done
-          else
+          add_all_rulespec_targets() {
             while IFS= read -r path; do
               add_existing_file "$path" "$rulespec_file_list"
             done < <(
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
-                  find "$root" -type f -name "*.yaml" ! -name "*.test.yaml"
+                  find "$root" -type f \( -name "*.yaml" -o -name "*.yml" \) \
+                    ! -name "*.test.yaml" ! -name "*.test.yml"
                 fi
               done
             )
@@ -264,10 +418,43 @@ jobs:
             done < <(
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
-                  find "$root" -type f -name "*.test.yaml"
+                  find "$root" -type f \( -name "*.test.yaml" -o -name "*.test.yml" \)
                 fi
               done
             )
+          }
+
+          mode="full-push"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+            mapfile -t all_changed_paths < <(
+              git diff --name-only --no-renames --diff-filter=ACMRTD "$base_ref" "$GITHUB_SHA"
+            )
+            mode="changed"
+            for path in "${all_changed_paths[@]}"; do
+              case "$path" in
+                .axiom/toolchain.toml|.github/workflows/*.yml|.github/workflows/*.yaml)
+                  mode="full-toolchain-bump"
+                  break
+                  ;;
+              esac
+            done
+
+            if [ "$mode" = "full-toolchain-bump" ]; then
+              add_all_rulespec_targets
+            else
+              for path in "${all_changed_paths[@]}"; do
+                for root in $VALIDATE_ROOTS; do
+                  case "$path" in
+                    "$root"/*)
+                      add_rulespec_target "$path"
+                      ;;
+                  esac
+                done
+              done
+            fi
+          else
+            add_all_rulespec_targets
           fi
 
           sort -u "$rulespec_file_list" -o "$rulespec_file_list"
@@ -275,7 +462,10 @@ jobs:
 
           echo "RULESPEC_FILE_LIST=$rulespec_file_list" >> "$GITHUB_ENV"
           echo "RULESPEC_TEST_FILE_LIST=$test_file_list" >> "$GITHUB_ENV"
+          echo "RULESPEC_VALIDATION_MODE=$mode" >> "$GITHUB_ENV"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
 
+          echo "RuleSpec validation mode: $mode"
           echo "RuleSpec files selected:"
           sed 's/^/- /' "$rulespec_file_list" || true
           echo "RuleSpec companion tests selected:"
@@ -296,9 +486,18 @@ jobs:
             exit 0
           fi
 
+          failures=()
           for file in "${rulespec_files[@]}"; do
-            axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers
+            if ! axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers; then
+              failures+=("$file")
+            fi
           done
+
+          if [ "${#failures[@]}" -ne 0 ]; then
+            printf 'RuleSpec validation failed for %s file(s):\n' "${#failures[@]}" >&2
+            printf -- '- %s\n' "${failures[@]}" >&2
+            exit 1
+          fi
 
       - name: Execute RuleSpec companion tests
         shell: bash
@@ -335,12 +534,21 @@ jobs:
             exit 0
           fi
 
+          failures=()
           for file in "${rulespec_files[@]}"; do
-            axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"
+            if ! axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"; then
+              failures+=("$file")
+            fi
           done
 
+          if [ "${#failures[@]}" -ne 0 ]; then
+            printf 'RuleSpec proof validation failed for %s file(s):\n' "${#failures[@]}" >&2
+            printf -- '- %s\n' "${failures[@]}" >&2
+            exit 1
+          fi
+
       - name: Validate PolicyEngine oracle coverage classification
-        if: ${{ github.event_name != 'pull_request' }}
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -351,7 +559,7 @@ jobs:
             --limit 50
 
       - name: Validate changed PolicyEngine oracle coverage classification
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
         shell: bash
         run: |
           set -euo pipefail
