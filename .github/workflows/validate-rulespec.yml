@@ -476,6 +476,7 @@ jobs:
         env:
           VALIDATE_ROOTS: ${{ inputs.validate-roots }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
+          AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
           set -euo pipefail
 
