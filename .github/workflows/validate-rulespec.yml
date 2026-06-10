@@ -29,12 +29,25 @@ on:
         type: string
         default: main
       validate-roots:
-        description: Space-separated repository roots containing RuleSpec YAML.
+        description: >-
+          Space-separated repository roots containing RuleSpec YAML, or
+          "auto" to discover jurisdiction directories in a country monorepo
+          (top-level dirs like us/, us-co/ that contain statutes/,
+          regulations/, policies/, or legislation/).
         required: false
         type: string
         default: "statutes regulations policies"
       run-pytest:
         description: Whether to run pytest when the repository has a tests directory.
+        required: false
+        type: boolean
+        default: true
+      run-generated-guard:
+        description: >-
+          Whether to run the manual-RuleSpec-change guard. Disable ONLY for
+          history-preserving migration PRs (e.g. repo consolidation) where
+          every file arrives from an already-validated repo; re-enable
+          immediately after.
         required: false
         type: boolean
         default: true
@@ -52,6 +65,41 @@ jobs:
         uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
+
+      - name: Resolve validation roots
+        id: resolve_roots
+        shell: bash
+        env:
+          VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
+        run: |
+          set -euo pipefail
+          if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
+            roots=""
+            for dir in */; do
+              dir="${dir%/}"
+              case "$dir" in _*|.*) continue ;; esac
+              if printf '%s' "$dir" | grep -Eq '^[a-z]{2}(-[a-z0-9-]+)*$'; then
+                for marker in statutes regulations policies legislation; do
+                  if [ -d "$dir/$marker" ]; then
+                    roots="$roots $dir"
+                    break
+                  fi
+                done
+              fi
+            done
+            roots="${roots# }"
+            if [ -z "$roots" ]; then
+              echo "validate-roots=auto found no jurisdiction directories" >&2
+              exit 1
+            fi
+            allowed_extra="sources programs"
+          else
+            roots="$VALIDATE_ROOTS_INPUT"
+            allowed_extra="sources"
+          fi
+          echo "roots=$roots" >> "$GITHUB_OUTPUT"
+          echo "allowed-extra=$allowed_extra" >> "$GITHUB_OUTPUT"
+          echo "Validation roots: $roots"
 
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
@@ -296,6 +344,9 @@ jobs:
 
       - name: Reject disallowed repository layout
         shell: bash
+        env:
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
+          ALLOWED_EXTRA_ROOTS: ${{ steps.resolve_roots.outputs.allowed-extra }}
         run: |
           set -euo pipefail
 
@@ -321,13 +372,14 @@ jobs:
             find tests -type f -name "*.yaml" 2>/dev/null || true
           )
 
+          prune=( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache -o -path ./.github )
+          for allowed in $VALIDATE_ROOTS $ALLOWED_EXTRA_ROOTS; do
+            prune+=( -o -path "./$allowed" )
+          done
           while IFS= read -r path; do
             disallowed+=("$path")
           done < <(
-            find . \
-              \( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache \
-                 -o -path ./.github -o -path ./statutes -o -path ./regulations \
-                 -o -path ./policies -o -path ./sources \) -prune \
+            find . \( "${prune[@]}" \) -prune \
               -o -type f \( -name "*.yaml" -o -name "*.yml" \) -print
           )
 
@@ -338,9 +390,10 @@ jobs:
           fi
 
       - name: Reject manual RuleSpec changes
+        if: ${{ inputs.run-generated-guard }}
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
           AXIOM_ENCODE_APPLY_SIGNING_KEY: ${{ secrets.AXIOM_ENCODE_APPLY_SIGNING_KEY }}
         run: |
           set -euo pipefail
@@ -363,7 +416,7 @@ jobs:
         id: validation_targets
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
         run: |
           set -euo pipefail
 
@@ -474,7 +527,7 @@ jobs:
       - name: Validate RuleSpec YAML
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
           AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
           AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
@@ -504,7 +557,7 @@ jobs:
       - name: Execute RuleSpec companion tests
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
         run: |
           set -euo pipefail
@@ -524,7 +577,7 @@ jobs:
       - name: Validate RuleSpec proofs and claims
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ inputs.validate-roots }}
+          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
           AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
           AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
