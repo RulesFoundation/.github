@@ -559,22 +559,24 @@ jobs:
           SKIP
           fi
 
-          failures=()
+          selected=()
           for file in "${rulespec_files[@]}"; do
             if grep -qxF "$file" "$skip_list"; then
               echo "SKIPPED (known-validation-gaps validate_failures): $file"
               continue
             fi
-            if ! axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers; then
-              failures+=("$file")
-            fi
+            selected+=("$GITHUB_WORKSPACE/$file")
           done
 
-          if [ "${#failures[@]}" -ne 0 ]; then
-            printf 'RuleSpec validation failed for %s file(s):\n' "${#failures[@]}" >&2
-            printf -- '- %s\n' "${failures[@]}" >&2
-            exit 1
+          if [ "${#selected[@]}" -eq 0 ]; then
+            echo "All selected RuleSpec YAML files are skipped."
+            exit 0
           fi
+
+          # One invocation for all files: validation reuses one process and
+          # one registry load instead of paying both per file. Failed files
+          # are listed in the command's own summary output.
+          axiom-encode validate "${selected[@]}" --skip-reviewers
 
       - name: Execute RuleSpec companion tests
         shell: bash
@@ -612,18 +614,14 @@ jobs:
             exit 0
           fi
 
-          failures=()
+          prefixed=()
           for file in "${rulespec_files[@]}"; do
-            if ! axiom-encode proof-validate "$GITHUB_WORKSPACE/$file"; then
-              failures+=("$file")
-            fi
+            prefixed+=("$GITHUB_WORKSPACE/$file")
           done
 
-          if [ "${#failures[@]}" -ne 0 ]; then
-            printf 'RuleSpec proof validation failed for %s file(s):\n' "${#failures[@]}" >&2
-            printf -- '- %s\n' "${failures[@]}" >&2
-            exit 1
-          fi
+          # One invocation for all files; failed files are listed in the
+          # command's own summary output.
+          axiom-encode proof-validate "${prefixed[@]}"
 
       - name: Validate PolicyEngine oracle coverage classification
         if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' }}
