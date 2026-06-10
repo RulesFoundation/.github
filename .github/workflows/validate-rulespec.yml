@@ -312,6 +312,9 @@ jobs:
         working-directory: _axiom/axiom-rules-engine
         run: cargo build --verbose
 
+      - name: Expose axiom-rules-engine on PATH
+        run: echo "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine/target/debug" >> "$GITHUB_PATH"
+
       - name: Link axiom-rules-engine as sibling checkout
         shell: bash
         run: |
@@ -542,8 +545,26 @@ jobs:
             exit 0
           fi
 
+          # Ratcheted pre-existing validate failures: repos may list files in
+          # known-validation-gaps.yaml under `validate_failures` (each needs
+          # an issue link in that file). Listed files are skipped LOUDLY.
+          skip_list="$RUNNER_TEMP/validate-skip.txt"
+          : > "$skip_list"
+          if [ -f known-validation-gaps.yaml ]; then
+            python - <<'SKIP' > "$skip_list"
+          import yaml
+          payload = yaml.safe_load(open("known-validation-gaps.yaml")) or {}
+          for entry in payload.get("validate_failures") or []:
+              print(entry)
+          SKIP
+          fi
+
           failures=()
           for file in "${rulespec_files[@]}"; do
+            if grep -qxF "$file" "$skip_list"; then
+              echo "SKIPPED (known-validation-gaps validate_failures): $file"
+              continue
+            fi
             if ! axiom-encode validate "$GITHUB_WORKSPACE/$file" --skip-reviewers; then
               failures+=("$file")
             fi
