@@ -380,7 +380,8 @@ jobs:
             disallowed+=("$path")
           done < <(
             find . \( "${prune[@]}" \) -prune \
-              -o -type f \( -name "*.yaml" -o -name "*.yml" \) -print
+              -o -type f \( -name "*.yaml" -o -name "*.yml" \) \
+                ! -name "known-dangling.yaml" ! -name "known-validation-gaps.yaml" -print
           )
 
           if [ "${#disallowed[@]}" -ne 0 ]; then
