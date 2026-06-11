@@ -56,9 +56,68 @@ permissions:
   contents: read
 
 jobs:
-  validate:
-    name: validate
+  shards:
+    name: shards
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+      first: ${{ steps.compute.outputs.first }}
+      roots: ${{ steps.compute.outputs.roots }}
+      allowed-extra: ${{ steps.compute.outputs.allowed-extra }}
+    steps:
+      - name: Checkout rules repository
+        uses: actions/checkout@v6.0.2
+
+      - name: Compute validation shards
+        id: compute
+        shell: bash
+        env:
+          VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
+        run: |
+          set -euo pipefail
+          if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
+            shards=()
+            for dir in */; do
+              dir="${dir%/}"
+              case "$dir" in _*|.*) continue ;; esac
+              if printf '%s' "$dir" | grep -Eq '^[a-z]{2}(-[a-z0-9-]+)*$'; then
+                for marker in statutes regulations policies legislation; do
+                  if [ -d "$dir/$marker" ]; then
+                    shards+=("$dir")
+                    break
+                  fi
+                done
+              fi
+            done
+            if [ "${#shards[@]}" -eq 0 ]; then
+              echo "validate-roots=auto found no jurisdiction directories" >&2
+              exit 1
+            fi
+            roots="${shards[*]}"
+            allowed_extra="sources programs"
+          else
+            shards=("__all__")
+            roots="$VALIDATE_ROOTS_INPUT"
+            allowed_extra="sources"
+          fi
+          matrix=$(printf '%s\n' "${shards[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "first=${shards[0]}" >> "$GITHUB_OUTPUT"
+          echo "roots=$roots" >> "$GITHUB_OUTPUT"
+          echo "allowed-extra=$allowed_extra" >> "$GITHUB_OUTPUT"
+          echo "Shards: $matrix"
+
+  validate:
+    # Keep the check name exactly `validate` across matrix legs so existing
+    # required-status configs keep matching; legacy repos run one `__all__`
+    # leg with behavior identical to the pre-shard workflow.
+    name: validate
+    needs: shards
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.shards.outputs.matrix) }}
 
     steps:
       - name: Checkout rules repository
@@ -66,40 +125,21 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve validation roots
+      - name: Resolve shard validation roots
         id: resolve_roots
         shell: bash
         env:
           VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
+          SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
-            roots=""
-            for dir in */; do
-              dir="${dir%/}"
-              case "$dir" in _*|.*) continue ;; esac
-              if printf '%s' "$dir" | grep -Eq '^[a-z]{2}(-[a-z0-9-]+)*$'; then
-                for marker in statutes regulations policies legislation; do
-                  if [ -d "$dir/$marker" ]; then
-                    roots="$roots $dir"
-                    break
-                  fi
-                done
-              fi
-            done
-            roots="${roots# }"
-            if [ -z "$roots" ]; then
-              echo "validate-roots=auto found no jurisdiction directories" >&2
-              exit 1
-            fi
-            allowed_extra="sources programs"
-          else
+          if [ "$SHARD" = "__all__" ]; then
             roots="$VALIDATE_ROOTS_INPUT"
-            allowed_extra="sources"
+          else
+            roots="$SHARD"
           fi
           echo "roots=$roots" >> "$GITHUB_OUTPUT"
-          echo "allowed-extra=$allowed_extra" >> "$GITHUB_OUTPUT"
-          echo "Validation roots: $roots"
+          echo "Shard validation roots: $roots"
 
       - name: Set up Python
         uses: actions/setup-python@v6.2.0
@@ -326,7 +366,7 @@ jobs:
           fi
 
       - name: Run repository tests
-        if: ${{ inputs.run-pytest }}
+        if: ${{ inputs.run-pytest && matrix.shard == needs.shards.outputs.first }}
         run: |
           if [ -d tests ] && find tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
             python -m pytest -q tests
@@ -335,6 +375,7 @@ jobs:
           fi
 
       - name: Reject obsolete generated files
+        if: ${{ matrix.shard == needs.shards.outputs.first }}
         run: |
           obsolete_ext="r""ac"
           matches="$(find . \
@@ -346,10 +387,11 @@ jobs:
           fi
 
       - name: Reject disallowed repository layout
+        if: ${{ matrix.shard == needs.shards.outputs.first }}
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
-          ALLOWED_EXTRA_ROOTS: ${{ steps.resolve_roots.outputs.allowed-extra }}
+          VALIDATE_ROOTS: ${{ needs.shards.outputs.roots }}
+          ALLOWED_EXTRA_ROOTS: ${{ needs.shards.outputs.allowed-extra }}
         run: |
           set -euo pipefail
 
@@ -394,10 +436,10 @@ jobs:
           fi
 
       - name: Reject manual RuleSpec changes
-        if: ${{ inputs.run-generated-guard }}
+        if: ${{ inputs.run-generated-guard && matrix.shard == needs.shards.outputs.first }}
         shell: bash
         env:
-          VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
+          VALIDATE_ROOTS: ${{ needs.shards.outputs.roots }}
           AXIOM_ENCODE_APPLY_SIGNING_KEY: ${{ secrets.AXIOM_ENCODE_APPLY_SIGNING_KEY }}
         run: |
           set -euo pipefail
