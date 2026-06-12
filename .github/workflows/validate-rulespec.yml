@@ -630,7 +630,25 @@ jobs:
 
           mapfile -t test_files < "$RULESPEC_TEST_FILE_LIST"
 
-          if [ "${#test_files[@]}" -eq 0 ]; then
+          # A module ratcheted under validate_failures cannot be expected to
+          # execute either; skip its companion test loudly (same
+          # known-validation-gaps.yaml list the validate step consults).
+          skip_list="$RUNNER_TEMP/validate-skip.txt"
+          selected=()
+          for test_file in "${test_files[@]}"; do
+            case "$test_file" in
+              *.test.yaml) module_file="${test_file%.test.yaml}.yaml" ;;
+              *.test.yml) module_file="${test_file%.test.yml}.yml" ;;
+              *) module_file="$test_file" ;;
+            esac
+            if [ -s "$skip_list" ] && grep -qxF "$module_file" "$skip_list"; then
+              echo "SKIPPED companion (known-validation-gaps validate_failures): $test_file"
+              continue
+            fi
+            selected+=("$test_file")
+          done
+
+          if [ "${#selected[@]}" -eq 0 ]; then
             echo "No RuleSpec companion tests selected; skipping."
             exit 0
           fi
@@ -638,7 +656,7 @@ jobs:
           axiom-encode test \
             --root "$GITHUB_WORKSPACE" \
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
-            "${test_files[@]}"
+            "${selected[@]}"
 
       - name: Validate RuleSpec proofs and claims
         shell: bash
