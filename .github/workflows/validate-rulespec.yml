@@ -747,3 +747,24 @@ jobs:
 
           print(f"Changed PolicyEngine oracle coverage passed for {len(items)} output(s).")
           PY
+
+  validate-complete:
+    # Matrix jobs get suffixed check names such as `validate (us-ca)`.
+    # Keep this aggregate name as `validate` so existing branch-protection
+    # rules requiring `validate / validate` have one stable context.
+    name: validate
+    needs: validate
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check validation matrix result
+        shell: bash
+        env:
+          VALIDATE_RESULT: ${{ needs.validate.result }}
+        run: |
+          set -euo pipefail
+          if [ "$VALIDATE_RESULT" != "success" ]; then
+            echo "Validation matrix completed with result: $VALIDATE_RESULT" >&2
+            exit 1
+          fi
+          echo "Validation matrix passed."
