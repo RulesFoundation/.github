@@ -395,6 +395,127 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [ -f .axiom/repository-structure.yaml ]; then
+          python - <<'PY'
+          import fnmatch
+          import sys
+          from pathlib import Path, PurePosixPath
+
+          import yaml
+
+          CONFIG_PATH = Path(".axiom/repository-structure.yaml")
+
+          def fail(message: str) -> None:
+              print(f"Repository structure error: {message}", file=sys.stderr)
+              sys.exit(1)
+
+          def string_set(payload: object, key: str) -> set[str]:
+              value = payload.get(key) if isinstance(payload, dict) else None
+              if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+                  fail(f"{key} must be a list of strings")
+              normalized = {item.strip("/") for item in value}
+              if "" in normalized:
+                  fail(f"{key} contains an empty path")
+              return normalized
+
+          def tracked_files() -> list[str]:
+              import subprocess
+
+              result = subprocess.run(
+                  ["git", "ls-files", "-z"],
+                  check=True,
+                  stdout=subprocess.PIPE,
+              )
+              return sorted(
+                  path.decode()
+                  for path in result.stdout.split(b"\0")
+                  if path
+              )
+
+          config = yaml.safe_load(CONFIG_PATH.read_text()) or {}
+          if not isinstance(config, dict):
+              fail(f"{CONFIG_PATH} must contain a mapping")
+          if config.get("version") != 1:
+              fail(f"{CONFIG_PATH} must set version: 1")
+
+          allowed_root_directories = string_set(config, "allowed_root_directories")
+          allowed_root_files = string_set(config, "allowed_root_files")
+          path_rules = config.get("path_rules")
+          if not isinstance(path_rules, list) or not path_rules:
+              fail("path_rules must be a non-empty list")
+
+          normalized_rules: list[dict[str, object]] = []
+          for index, rule in enumerate(path_rules, start=1):
+              if not isinstance(rule, dict):
+                  fail(f"path_rules[{index}] must be a mapping")
+              patterns = rule.get("patterns")
+              if not isinstance(patterns, list) or not patterns or not all(
+                  isinstance(pattern, str) for pattern in patterns
+              ):
+                  fail(f"path_rules[{index}].patterns must be a non-empty list of strings")
+              allow_extensions = rule.get("allow_extensions", [])
+              allow_filenames = rule.get("allow_filenames", [])
+              if not isinstance(allow_extensions, list) or not all(
+                  isinstance(extension, str) for extension in allow_extensions
+              ):
+                  fail(f"path_rules[{index}].allow_extensions must be a list of strings")
+              if not isinstance(allow_filenames, list) or not all(
+                  isinstance(filename, str) for filename in allow_filenames
+              ):
+                  fail(f"path_rules[{index}].allow_filenames must be a list of strings")
+              normalized_rules.append(
+                  {
+                      "patterns": [pattern.strip("/") for pattern in patterns],
+                      "allow_extensions": set(allow_extensions),
+                      "allow_filenames": set(allow_filenames),
+                  }
+              )
+
+          problems: list[str] = []
+          for path in tracked_files():
+              parts = PurePosixPath(path).parts
+              if len(parts) == 1:
+                  if path not in allowed_root_files:
+                      problems.append(f"{path}: top-level file is not allowed")
+                  continue
+
+              root = parts[0]
+              if root not in allowed_root_directories:
+                  problems.append(f"{path}: top-level directory {root}/ is not allowed")
+                  continue
+
+              matched_rule = None
+              for rule in normalized_rules:
+                  if any(fnmatch.fnmatchcase(path, pattern) for pattern in rule["patterns"]):
+                      matched_rule = rule
+                      break
+              if matched_rule is None:
+                  problems.append(f"{path}: no path rule matched")
+                  continue
+
+              name = PurePosixPath(path).name
+              extension = PurePosixPath(path).suffix
+              if name in matched_rule["allow_filenames"]:
+                  continue
+              if extension in matched_rule["allow_extensions"]:
+                  continue
+              problems.append(
+                  f"{path}: file name/extension is not allowed by matched path rule"
+              )
+
+          if problems:
+              print(
+                  f"Repository layout does not match {CONFIG_PATH}.",
+                  file=sys.stderr,
+              )
+              for problem in problems:
+                  print(f"- {problem}", file=sys.stderr)
+              sys.exit(1)
+
+          print(f"Repository layout matches {CONFIG_PATH}.")
+          PY
+          exit 0
+          fi
           disallowed=()
 
           for root in statute regulation policy; do

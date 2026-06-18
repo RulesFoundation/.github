@@ -70,6 +70,41 @@ coverage. Rules repos using this workflow need the
 an exact PolicyEngine mapping or a harness-side `not_comparable` classification
 with a rationale.
 
+Repos can opt into stricter structure checks by adding
+`.axiom/repository-structure.yaml`. When present, the reusable workflow treats it
+as the source of truth for allowed top-level directories, allowed top-level
+files, and per-folder file extensions or sentinel filenames. This is intended
+for country repos that need to keep executable oracle adapters, generated
+outputs, and source dumps out of the RuleSpec corpus:
+
+```yaml
+version: 1
+allowed_root_directories:
+  - .axiom
+  - .github
+  - data
+  - nz
+  - tests
+allowed_root_files:
+  - .gitignore
+  - CLAUDE.md
+  - README.md
+  - known-validation-gaps.yaml
+  - variables.toml
+path_rules:
+  - patterns: [".axiom/**"]
+    allow_extensions: [".toml", ".yaml"]
+  - patterns: [".github/**"]
+    allow_extensions: [".yml", ".yaml"]
+  - patterns: ["data/**"]
+    allow_extensions: [".json", ".jsonl", ".yaml", ".yml"]
+  - patterns: ["nz/**"]
+    allow_extensions: [".yaml"]
+    allow_filenames: [".gitkeep"]
+  - patterns: ["tests/**"]
+    allow_extensions: [".py"]
+```
+
 ## Links
 
 - https://axiom-foundation.org
