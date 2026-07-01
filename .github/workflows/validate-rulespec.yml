@@ -644,6 +644,45 @@ jobs:
             )
           }
 
+          classify_toolchain_change() {
+            python - "$base_ref" <<'PY'
+          import subprocess
+          import sys
+          import tomllib
+          from pathlib import Path
+
+          base_ref = sys.argv[1]
+          path = Path(".axiom/toolchain.toml")
+          result = subprocess.run(
+              ["git", "show", f"{base_ref}:.axiom/toolchain.toml"],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL,
+          )
+          if result.returncode != 0 or not path.exists():
+              print("full")
+              raise SystemExit
+
+          def load(text: bytes) -> dict[str, object]:
+              payload = tomllib.loads(text.decode())
+              table = payload.get("toolchain", payload)
+              if not isinstance(table, dict):
+                  return {}
+              return table
+
+          before = load(result.stdout)
+          after = load(path.read_bytes())
+          changed = {
+              key for key in set(before) | set(after)
+              if before.get(key) != after.get(key)
+          }
+          if changed and changed <= {"axiom_corpus_ref"}:
+              print("corpus-only")
+          else:
+              print("full")
+          PY
+          }
+
           mode="full-push"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_ref="${{ github.event.pull_request.base.sha }}"
@@ -653,9 +692,17 @@ jobs:
             mode="changed"
             for path in "${all_changed_paths[@]}"; do
               case "$path" in
-                .axiom/toolchain.toml|.github/workflows/*.yml|.github/workflows/*.yaml)
+                .github/workflows/*.yml|.github/workflows/*.yaml)
                   mode="full-toolchain-bump"
                   break
+                  ;;
+                .axiom/toolchain.toml)
+                  if [ "$(classify_toolchain_change)" = "corpus-only" ]; then
+                    mode="changed-corpus-toolchain-bump"
+                  else
+                    mode="full-toolchain-bump"
+                    break
+                  fi
                   ;;
               esac
             done
