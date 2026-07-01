@@ -695,7 +695,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
-          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
+          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
           AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
           AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
@@ -745,7 +745,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
-          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}/_axiom/rulespec-us
+          AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
         run: |
           set -euo pipefail
 
