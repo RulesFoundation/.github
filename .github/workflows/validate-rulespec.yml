@@ -887,6 +887,12 @@ jobs:
           coverage_path = Path(sys.argv[1])
           rulespec_file_list = Path(sys.argv[2])
           repo = Path(os.environ["GITHUB_WORKSPACE"]).name
+          if repo.startswith("rulespec-be"):
+              print(
+                  "Changed PolicyEngine oracle coverage skipped for Belgium; "
+                  "rulespec-be uses the EUROMOD household-level oracle surface."
+              )
+              raise SystemExit
           changed = {
               f"{repo}/{line.strip()}"
               for line in rulespec_file_list.read_text().splitlines()
