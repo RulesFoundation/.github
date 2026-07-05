@@ -13,6 +13,15 @@ on:
         required: false
         type: string
         default: main
+      oracle-coverage-axiom-encode-ref:
+        description: >-
+          Git ref for TheAxiomFoundation/axiom-encode used only by changed-file
+          PolicyEngine oracle coverage classification. This intentionally
+          defaults to main so new oracle mappings can unblock generated
+          RuleSpec PRs without forcing a full validation toolchain bump.
+        required: false
+        type: string
+        default: main
       axiom-rules-engine-ref:
         description: Git ref for TheAxiomFoundation/axiom-rules-engine.
         required: false
@@ -929,6 +938,29 @@ jobs:
             --fail-on-unmapped \
             --fail-on-untested-comparable \
             --limit 50
+
+      - name: Checkout changed-file oracle coverage classifier
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
+        uses: actions/checkout@v6.0.2
+        with:
+          repository: TheAxiomFoundation/axiom-encode
+          ref: ${{ inputs.oracle-coverage-axiom-encode-ref }}
+          path: _axiom/axiom-encode-oracle-coverage
+
+      - name: Install changed-file oracle coverage classifier
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e _axiom/axiom-encode-oracle-coverage
+          python - <<'PY'
+          import importlib.metadata
+
+          print(
+              "Changed-file oracle coverage classifier uses axiom-encode "
+              f"{importlib.metadata.version('axiom-encode')}."
+          )
+          PY
 
       - name: Validate changed PolicyEngine oracle coverage classification
         if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
