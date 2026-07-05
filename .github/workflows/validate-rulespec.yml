@@ -953,6 +953,29 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -e _axiom/axiom-encode-oracle-coverage
+          # The changed-file classifier checkout (oracle-coverage-axiom-encode-ref,
+          # default main) may pin a newer axiom-oracles commit than the toolchain
+          # step installed. axiom-oracles is a git dependency whose version string
+          # does not change per commit, so pip treats the pinned SHA as "already
+          # satisfied" and keeps the stale copy — the classifier then reports
+          # freshly-added not_comparable mappings as unmapped. Force-reinstall the
+          # axiom-oracles pin declared by this checkout so the classifier reads its
+          # bridge mappings, not the toolchain-pinned ones.
+          oracles_spec="$(
+            python - <<'PY'
+          import pathlib
+          import re
+
+          text = pathlib.Path("_axiom/axiom-encode-oracle-coverage/pyproject.toml").read_text()
+          match = re.search(
+              r'"(axiom-oracles @ git\+https://github\.com/[^"]+)"', text
+          )
+          print(match.group(1) if match else "")
+          PY
+          )"
+          if [ -n "$oracles_spec" ]; then
+            python -m pip install --force-reinstall --no-deps "$oracles_spec"
+          fi
           python - <<'PY'
           import importlib.metadata
 
