@@ -60,6 +60,17 @@ on:
         required: false
         type: boolean
         default: true
+      guard-programs-root:
+        description: >-
+          Whether to require encoding manifests on the composed-pilot
+          `programs/` root too (encode#1053). Opt-in per repo: enable only
+          after every existing `programs/` file has an encoder apply-manifest
+          or a manual attestation, otherwise the guard fails on the backlog.
+          When true, `programs` is guarded as a RuleSpec root rather than
+          merely tolerated as an allowed extra directory.
+        required: false
+        type: boolean
+        default: false
       run-money-atom-check:
         description: >-
           Whether to require a proof atom citing a provision on every
@@ -93,6 +104,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
+          GUARD_PROGRAMS_ROOT: ${{ inputs.guard-programs-root }}
         run: |
           set -euo pipefail
           if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
@@ -114,10 +126,23 @@ jobs:
               exit 1
             fi
             roots="${shards[*]}"
-            allowed_extra="sources programs"
+            if [ "$GUARD_PROGRAMS_ROOT" = "true" ]; then
+              # Guard the composed-pilot programs/ root instead of merely
+              # tolerating it as an allowed extra (encode#1053).
+              roots="$roots programs"
+              allowed_extra="sources"
+            else
+              allowed_extra="sources programs"
+            fi
           else
             shards=("__all__")
             roots="$VALIDATE_ROOTS_INPUT"
+            if [ "$GUARD_PROGRAMS_ROOT" = "true" ]; then
+              case " $roots " in
+                *" programs "*) : ;;
+                *) roots="$roots programs" ;;
+              esac
+            fi
             allowed_extra="sources"
           fi
           matrix=$(printf '%s\n' "${shards[@]}" | python3 -c 'import json,sys; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
