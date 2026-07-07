@@ -70,6 +70,21 @@ coverage. Rules repos using this workflow need the
 an exact PolicyEngine mapping or a harness-side `not_comparable` classification
 with a rationale.
 
+The guard also rejects a `backend: manual` apply manifest that introduces a
+*new* rule file unless it declares `manual_exception: composition | repair |
+fixtures | <issue-ref>`. Net-new statutory encoding must come from an encoder
+run; hand-authoring stays legal only for composition/oracle plumbing,
+validator-driven repairs, and fixtures, and only by declaring itself. Attest
+encoder output committed outside the `--apply` flow with `axiom-encode
+sign-applied-files` (add `--manual-exception` for new files, or `--all` to
+backfill a corpus that has no manifests). `axiom-encode manifest-census`
+reports each repo's encoder-generated / manual / unmanifested coverage.
+
+Set `guard-programs-root: true` on the caller to require manifests on the
+composed-pilot `programs/` root too (default `false`). Enable it per repo only
+after every existing `programs/` file has a manifest or manual attestation,
+otherwise the guard fails on the backlog.
+
 Repos can opt into stricter structure checks by adding
 `.axiom/repository-structure.yaml`. When present, the reusable workflow treats it
 as the source of truth for allowed top-level directories, allowed top-level
