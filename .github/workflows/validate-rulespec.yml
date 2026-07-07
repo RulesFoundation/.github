@@ -98,6 +98,10 @@ jobs:
     steps:
       - name: Checkout rules repository
         uses: actions/checkout@v6.0.2
+        with:
+          # Full history so shard-on-demand can diff the pull-request base
+          # against the head to see which jurisdiction subtrees changed.
+          fetch-depth: 0
 
       - name: Compute validation shards
         id: compute
@@ -105,27 +109,35 @@ jobs:
         env:
           VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
           GUARD_PROGRAMS_ROOT: ${{ inputs.guard-programs-root }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
-            shards=()
+            all_shards=()
             for dir in */; do
               dir="${dir%/}"
               case "$dir" in _*|.*) continue ;; esac
               if printf '%s' "$dir" | grep -Eq '^[a-z]{2}(-[a-z0-9-]+)*$'; then
                 for marker in statutes regulations policies legislation; do
                   if [ -d "$dir/$marker" ]; then
-                    shards+=("$dir")
+                    all_shards+=("$dir")
                     break
                   fi
                 done
               fi
             done
-            if [ "${#shards[@]}" -eq 0 ]; then
+            if [ "${#all_shards[@]}" -eq 0 ]; then
               echo "validate-roots=auto found no jurisdiction directories" >&2
               exit 1
             fi
-            roots="${shards[*]}"
+            # roots always covers every discovered jurisdiction, even when the
+            # matrix is scoped to one shard: the repo-wide gates (layout,
+            # obsolete-file, manual-change guard, money-atom) run on the first
+            # shard against this full set, so their whole-repo scope is
+            # preserved regardless of which single shard the matrix selects.
+            roots="${all_shards[*]}"
             if [ "$GUARD_PROGRAMS_ROOT" = "true" ]; then
               # Guard the composed-pilot programs/ root instead of merely
               # tolerating it as an allowed extra (encode#1053).
@@ -134,6 +146,87 @@ jobs:
             else
               allowed_extra="sources programs"
             fi
+
+            # Shard-on-demand: a pull request whose diff is confined to exactly
+            # one jurisdiction subtree (the bulk-encoding case) validates only
+            # that jurisdiction's shard. Multi-tree diffs, pushes, scheduled
+            # runs, and any change that touches shared infrastructure fall back
+            # to the full matrix, which stays the honesty backstop against
+            # cross-shard drift (a daily scheduled full run lives in the
+            # calling repo). The repo-wide gates still run because they are
+            # pinned to the first shard, so no gate is skipped when scoped.
+            mapfile -t selected_shards < <(
+              ALL_SHARDS="${all_shards[*]}" \
+              EVENT_NAME="$EVENT_NAME" \
+              PR_BASE_SHA="$PR_BASE_SHA" \
+              HEAD_SHA="$HEAD_SHA" \
+              python3 <<'PY'
+          import os
+          import subprocess
+          import sys
+
+          all_shards = os.environ["ALL_SHARDS"].split()
+          shard_set = set(all_shards)
+
+
+          def full(reason: str) -> None:
+              print(f"scope=full ({reason})", file=sys.stderr)
+              for shard in all_shards:
+                  print(shard)
+              raise SystemExit
+
+
+          event = os.environ.get("EVENT_NAME", "")
+          base = os.environ.get("PR_BASE_SHA", "").strip()
+          head = os.environ.get("HEAD_SHA", "").strip()
+
+          if event != "pull_request" or not base or not head:
+              full(f"event={event or 'unknown'}")
+
+          diff = subprocess.run(
+              ["git", "diff", "--name-only", "--no-renames",
+               "--diff-filter=ACMRTD", base, head],
+              stdout=subprocess.PIPE, text=True,
+          )
+          if diff.returncode != 0:
+              full("git diff failed")
+
+          changed = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
+          if not changed:
+              full("empty diff")
+
+          touched: set[str] = set()
+          for path in changed:
+              top = path.split("/", 1)[0]
+              if top in shard_set:
+                  touched.add(top)
+                  continue
+              # The reverse index is derived tooling metadata regenerated from
+              # the YAML; it never changes what any shard must validate, so an
+              # index-only edit alongside a jurisdiction edit stays scoped.
+              if path.startswith(".axiom/index/"):
+                  continue
+              # Anything else (workflows, toolchain, structure config, other
+              # .axiom entries, sources/, programs/, root files, ...) can
+              # affect every shard: fall back to the full matrix.
+              full(f"cross-cutting path {path}")
+
+          if len(touched) == 1:
+              only = next(iter(touched))
+              print(f"scope=one-jurisdiction ({only})", file=sys.stderr)
+              print(only)
+          else:
+              full(f"{len(touched)} jurisdiction subtrees touched")
+          PY
+            )
+            # Never emit an empty matrix: if scope selection produced nothing
+            # (e.g. the classifier crashed), run the full matrix rather than
+            # skip validation, so the required check can never pass vacuously.
+            if [ "${#selected_shards[@]}" -eq 0 ]; then
+              echo "Scope selection produced no shards; falling back to full matrix." >&2
+              selected_shards=("${all_shards[@]}")
+            fi
+            shards=("${selected_shards[@]}")
           else
             shards=("__all__")
             roots="$VALIDATE_ROOTS_INPUT"
