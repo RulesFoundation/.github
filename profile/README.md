@@ -19,7 +19,7 @@ In pipeline order — sources in, executable programs out:
 | [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-assisted RuleSpec encoding and validation tooling. |
 | [axiom-rules-engine](https://github.com/TheAxiomFoundation/axiom-rules-engine) | RuleSpec compiler and runtime. |
 | [axiom-programs](https://github.com/TheAxiomFoundation/axiom-programs) | Declarative compose specs assembling atomic rules into benefit and tax programs. |
-| [axiom-compose](https://github.com/TheAxiomFoundation/axiom-compose) | Deterministic program composer: spec + rule corpus → runnable program. |
+| [axiom-compose](https://github.com/TheAxiomFoundation/axiom-compose) | Deterministic program composer: spec + encodings → runnable program. |
 | [axiom-oracles](https://github.com/TheAxiomFoundation/axiom-oracles) | Cross-engine validation against PolicyEngine, TAXSIM, and official calculators. |
 | [axiom-microsim](https://github.com/TheAxiomFoundation/axiom-microsim) | Population-scale microsimulation running on the Axiom engine. |
 | [axiom-foundation.org](https://github.com/TheAxiomFoundation/axiom-foundation.org) | Axiom website and app for navigating encoded law. |
