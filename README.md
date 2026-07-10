@@ -52,6 +52,7 @@ axiom_encode_version = "0.1.0"
 axiom_encode_ref = "v0.1.0"
 axiom_rules_engine_ref = "v0.1.0"
 axiom_corpus_ref = "v0.1.0"
+axiom_corpus_release_selector = "us-rulespec-2026-07-10"
 rulespec_us_ref = "v0.1.0"
 ```
 

@@ -254,6 +254,7 @@ jobs:
 
           TOOLCHAIN_PATH = Path(".axiom/toolchain.toml")
           REF_RE = re.compile(r"(?:[0-9a-f]{40}|v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?)")
+          RELEASE_SELECTOR_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 
           def fail(message: str) -> None:
               print(f"RuleSpec toolchain error: {message}", file=sys.stderr)
@@ -261,12 +262,25 @@ jobs:
 
           def load_toolchain(text: str) -> dict[str, object]:
               payload = tomllib.loads(text)
-              if not isinstance(payload, dict):
-                  fail("toolchain file must contain a TOML table")
-              table = payload.get("toolchain", payload)
+              if not isinstance(payload, dict) or set(payload) != {"toolchain"}:
+                  fail("toolchain file must contain exactly one top-level [toolchain] table")
+              table = payload["toolchain"]
               if not isinstance(table, dict):
                   fail("[toolchain] must be a TOML table")
               return table
+
+          def release_selector(config: dict[str, object]) -> str:
+              value = config.get("axiom_corpus_release_selector")
+              if not isinstance(value, str) or not value:
+                  fail("axiom_corpus_release_selector must be a non-empty string")
+              if value != value.strip() or RELEASE_SELECTOR_RE.fullmatch(value) is None:
+                  fail(
+                      "axiom_corpus_release_selector must be a lowercase "
+                      "hyphen-delimited identifier"
+                  )
+              if value == "current":
+                  fail("axiom_corpus_release_selector must name an immutable release")
+              return value
 
           def selected_ref(config: dict[str, object], key: str) -> str:
               value = config.get(key)
@@ -319,6 +333,7 @@ jobs:
               "axiom_encode_ref": selected_ref(config, "axiom_encode_ref"),
               "axiom_rules_engine_ref": selected_ref(config, "axiom_rules_engine_ref"),
               "axiom_corpus_ref": selected_ref(config, "axiom_corpus_ref"),
+              "axiom_corpus_release_selector": release_selector(config),
               "rulespec_us_ref": selected_ref(config, "rulespec_us_ref"),
           }
 
@@ -408,6 +423,51 @@ jobs:
           repository: TheAxiomFoundation/rulespec-us
           ref: ${{ steps.toolchain.outputs.rulespec_us_ref }}
           path: _axiom/rulespec-us
+
+      - name: Verify named corpus release selector
+        shell: bash
+        env:
+          AXIOM_CORPUS_RELEASE_SELECTOR: ${{ steps.toolchain.outputs.axiom_corpus_release_selector }}
+        run: |
+          set -euo pipefail
+          python -I - <<'PY'
+          import json
+          import os
+          import stat
+          import sys
+          from pathlib import Path
+
+          root = Path("_axiom/axiom-corpus").resolve(strict=True)
+          name = os.environ["AXIOM_CORPUS_RELEASE_SELECTOR"]
+          path = root / "manifests" / "releases" / f"{name}.json"
+          if path.is_symlink():
+              print(f"Corpus release selector must not be a symlink: {path}", file=sys.stderr)
+              sys.exit(1)
+          try:
+              metadata = path.stat()
+          except OSError:
+              print(f"Named corpus release selector not found: {path}", file=sys.stderr)
+              sys.exit(1)
+          if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4 * 1024 * 1024:
+              print(f"Corpus release selector is not a bounded regular file: {path}", file=sys.stderr)
+              sys.exit(1)
+          try:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+              print(f"Corpus release selector is not valid UTF-8 JSON: {exc}", file=sys.stderr)
+              sys.exit(1)
+          if not isinstance(payload, dict) or payload.get("name") != name:
+              print(
+                  f"Corpus release selector identity does not match {name!r}: {path}",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          scopes = payload.get("scopes")
+          if not isinstance(scopes, list) or not scopes:
+              print(f"Corpus release selector has no active scopes: {path}", file=sys.stderr)
+              sys.exit(1)
+          print(f"Verified named corpus release selector {name!r} with {len(scopes)} scope(s).")
+          PY
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -525,6 +585,7 @@ jobs:
           audit_args=(
             audit
             --root "$GITHUB_WORKSPACE"
+            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus"
             --protected-base "$base_waivers"
             --changed-paths "$changed_paths"
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
@@ -804,7 +865,10 @@ jobs:
               key for key in set(before) | set(after)
               if before.get(key) != after.get(key)
           }
-          if changed and changed <= {"axiom_corpus_ref"}:
+          if changed and changed <= {
+              "axiom_corpus_ref",
+              "axiom_corpus_release_selector",
+          }:
               print("corpus-only")
           else:
               print("full")
@@ -906,7 +970,10 @@ jobs:
           # One invocation for all files: validation reuses one process and
           # one registry load instead of paying both per file. Failed files
           # are listed in the command's own summary output.
-          axiom-encode validate "${selected[@]}" --skip-reviewers
+          axiom-encode validate \
+            "${selected[@]}" \
+            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
+            --skip-reviewers
 
       - name: Execute RuleSpec companion tests
         shell: bash
@@ -968,7 +1035,9 @@ jobs:
 
           # One invocation for all files; failed files are listed in the
           # command's own summary output.
-          axiom-encode proof-validate "${prefixed[@]}"
+          axiom-encode proof-validate \
+            "${prefixed[@]}" \
+            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus"
 
       - name: Require money proof atoms
         # Scan the whole repository (not just changed files) on the first
@@ -999,16 +1068,6 @@ jobs:
             exit 0
           fi
 
-          # A repo whose pinned axiom-encode toolchain ref predates the
-          # money-atom surface has no `--money-atoms-only` flag. Skip loudly
-          # rather than hard-failing so this shared workflow does not break
-          # repos mid-rollout: those repos enable the gate for real by bumping
-          # their `.axiom/toolchain.toml` axiom-encode ref (see PR notes).
-          if ! axiom-encode proof-validate --help 2>&1 | grep -q -- --money-atoms-only; then
-            echo "::warning::Pinned axiom-encode does not support --money-atoms-only; skipping money-atom check. Bump .axiom/toolchain.toml axiom_encode_ref to enable it."
-            exit 0
-          fi
-
           ratchet_args=()
           if [ -f known-missing-money-atoms.yaml ]; then
             echo "Using money-atom ratchet: known-missing-money-atoms.yaml"
@@ -1025,6 +1084,7 @@ jobs:
             "${money_atom_files[@]}" \
             --money-atoms-only \
             --money-atom-root "$GITHUB_WORKSPACE" \
+            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
             "${ratchet_args[@]}"
 
       - name: Validate PolicyEngine oracle coverage classification
