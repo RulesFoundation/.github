@@ -501,36 +501,34 @@ jobs:
               echo "::error::$EVENT_NAME validation is restricted to the default branch."
               exit 1
             fi
+            protected_base_sha="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || true)"
+            if ! printf '%s' "$protected_base_sha" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "::error::$EVENT_NAME validation waiver audit has no parent protected-base SHA."
+              exit 1
+            fi
           else
             echo "::error::Unsupported validation event for waiver audit: $EVENT_NAME"
             exit 1
           fi
 
-          if [ -n "$protected_base_sha" ]; then
-            if ! git cat-file -e "${protected_base_sha}^{commit}" 2>/dev/null; then
-              echo "::error::Protected-base commit is unavailable: $protected_base_sha"
-              exit 1
-            fi
-            if ! git show "$protected_base_sha:known-validation-gaps.yaml" > "$base_waivers" 2>/dev/null; then
-              echo "::error::Protected base does not define known-validation-gaps.yaml."
-              exit 1
-            fi
-            git diff --name-only --no-renames --diff-filter=ACMRTD \
-              "$protected_base_sha" "$GITHUB_SHA" > "$changed_paths"
+          if ! git cat-file -e "${protected_base_sha}^{commit}" 2>/dev/null; then
+            echo "::error::Protected-base commit is unavailable: $protected_base_sha"
+            exit 1
           fi
+          if ! git show "$protected_base_sha:known-validation-gaps.yaml" > "$base_waivers" 2>/dev/null; then
+            echo "::error::Protected base does not define known-validation-gaps.yaml."
+            exit 1
+          fi
+          git diff --name-only --no-renames --diff-filter=ACMRTD \
+            "$protected_base_sha" "$GITHUB_SHA" > "$changed_paths"
 
           audit_args=(
             audit
             --root "$GITHUB_WORKSPACE"
-            --waivers "$head_waivers"
+            --protected-base "$base_waivers"
+            --changed-paths "$changed_paths"
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
           )
-          if [ -n "$protected_base_sha" ]; then
-            audit_args+=(
-              --protected-base "$base_waivers"
-              --changed-paths "$changed_paths"
-            )
-          fi
 
           if [ "$SHARD" = "$FIRST_SHARD" ]; then
             # Execute the complete active set once. Dependency changes can
@@ -542,8 +540,7 @@ jobs:
           fi
 
           axiom-encode validation-waivers active-paths \
-            --root "$GITHUB_WORKSPACE" \
-            --waivers "$head_waivers" > "$active_paths"
+            --root "$GITHUB_WORKSPACE" > "$active_paths"
           echo "VALIDATION_WAIVER_ACTIVE_PATHS=$active_paths" >> "$GITHUB_ENV"
 
       - name: Reject obsolete generated files
