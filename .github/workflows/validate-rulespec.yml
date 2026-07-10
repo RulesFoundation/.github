@@ -561,13 +561,13 @@ jobs:
       - name: Reject disallowed repository layout
         if: ${{ matrix.shard == needs.shards.outputs.first }}
         shell: bash
-        env:
-          VALIDATE_ROOTS: ${{ needs.shards.outputs.roots }}
-          ALLOWED_EXTRA_ROOTS: ${{ needs.shards.outputs.allowed-extra }}
         run: |
           set -euo pipefail
 
-          if [ -f .axiom/repository-structure.yaml ]; then
+          if [ ! -f .axiom/repository-structure.yaml ]; then
+            echo "::error::Every RuleSpec repository must define .axiom/repository-structure.yaml."
+            exit 1
+          fi
           python -I - <<'PY'
           import fnmatch
           import sys
@@ -686,47 +686,6 @@ jobs:
 
           print(f"Repository layout matches {CONFIG_PATH}.")
           PY
-          exit 0
-          fi
-          disallowed=()
-
-          for root in statute regulation policy; do
-            if [ -e "$root" ]; then
-              disallowed+=("$root/")
-            fi
-          done
-
-          while IFS= read -r path; do
-            disallowed+=("$path")
-          done < <(
-            find . \
-              \( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache \) -prune \
-              -o -type f \( -name "parameters.yaml" -o -name "tests.yaml" \) -print
-          )
-
-          while IFS= read -r path; do
-            disallowed+=("$path")
-          done < <(
-            find tests -type f -name "*.yaml" 2>/dev/null || true
-          )
-
-          prune=( -path ./.git -o -path ./_axiom -o -path ./.venv -o -path ./.pytest_cache -o -path ./.github )
-          for allowed in $VALIDATE_ROOTS $ALLOWED_EXTRA_ROOTS; do
-            prune+=( -o -path "./$allowed" )
-          done
-          while IFS= read -r path; do
-            disallowed+=("$path")
-          done < <(
-            find . \( "${prune[@]}" \) -prune \
-              -o -type f \( -name "*.yaml" -o -name "*.yml" \) \
-                ! -name "known-dangling.yaml" ! -name "known-validation-gaps.yaml" -print
-          )
-
-          if [ "${#disallowed[@]}" -ne 0 ]; then
-            printf 'Repository layout is not allowed. Use RuleSpec YAML under statutes/, regulations/, or policies/.\n' >&2
-            printf '%s\n' "${disallowed[@]}" >&2
-            exit 1
-          fi
 
       - name: Reject manual RuleSpec changes
         if: ${{ inputs.run-generated-guard && matrix.shard == needs.shards.outputs.first }}
