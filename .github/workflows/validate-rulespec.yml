@@ -247,6 +247,7 @@ jobs:
           python -I - <<'PY'
           import os
           import re
+          import stat
           import subprocess
           import sys
           import tomllib
@@ -255,19 +256,73 @@ jobs:
           TOOLCHAIN_PATH = Path(".axiom/toolchain.toml")
           REF_RE = re.compile(r"(?:[0-9a-f]{40}|v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?)")
           RELEASE_SELECTOR_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+          MAX_TOOLCHAIN_BYTES = 64 * 1024
 
           def fail(message: str) -> None:
               print(f"RuleSpec toolchain error: {message}", file=sys.stderr)
               sys.exit(1)
 
           def load_toolchain(text: str) -> dict[str, object]:
-              payload = tomllib.loads(text)
+              try:
+                  payload = tomllib.loads(text)
+              except tomllib.TOMLDecodeError as exc:
+                  fail(f"toolchain file is not valid TOML: {exc}")
               if not isinstance(payload, dict) or set(payload) != {"toolchain"}:
                   fail("toolchain file must contain exactly one top-level [toolchain] table")
               table = payload["toolchain"]
               if not isinstance(table, dict):
                   fail("[toolchain] must be a TOML table")
               return table
+
+          def read_head_toolchain() -> str:
+              nofollow = getattr(os, "O_NOFOLLOW", None)
+              directory = getattr(os, "O_DIRECTORY", None)
+              if nofollow is None or directory is None:
+                  fail("platform cannot safely open .axiom/toolchain.toml")
+              flags = os.O_RDONLY | nofollow | getattr(os, "O_CLOEXEC", 0)
+              descriptors: list[int] = []
+              file_descriptor: int | None = None
+              try:
+                  root_descriptor = os.open(".", flags | directory)
+                  descriptors.append(root_descriptor)
+                  axiom_descriptor = os.open(
+                      ".axiom",
+                      flags | directory,
+                      dir_fd=root_descriptor,
+                  )
+                  descriptors.append(axiom_descriptor)
+                  file_descriptor = os.open(
+                      "toolchain.toml",
+                      flags,
+                      dir_fd=axiom_descriptor,
+                  )
+                  metadata = os.fstat(file_descriptor)
+                  if not stat.S_ISREG(metadata.st_mode):
+                      fail(".axiom/toolchain.toml must be a regular file")
+                  if metadata.st_size > MAX_TOOLCHAIN_BYTES:
+                      fail(".axiom/toolchain.toml exceeds the 64 KiB safety limit")
+                  chunks: list[bytes] = []
+                  remaining = MAX_TOOLCHAIN_BYTES + 1
+                  while remaining:
+                      chunk = os.read(file_descriptor, remaining)
+                      if not chunk:
+                          break
+                      chunks.append(chunk)
+                      remaining -= len(chunk)
+                  raw = b"".join(chunks)
+                  if len(raw) > MAX_TOOLCHAIN_BYTES:
+                      fail(".axiom/toolchain.toml exceeds the 64 KiB safety limit")
+                  try:
+                      return raw.decode("utf-8")
+                  except UnicodeError:
+                      fail(".axiom/toolchain.toml must be valid UTF-8")
+              except OSError as exc:
+                  fail(f"could not safely open .axiom/toolchain.toml: {exc}")
+              finally:
+                  if file_descriptor is not None:
+                      os.close(file_descriptor)
+                  for descriptor in reversed(descriptors):
+                      os.close(descriptor)
 
           def release_selector(config: dict[str, object]) -> str:
               value = config.get("axiom_corpus_release_selector")
@@ -312,21 +367,55 @@ jobs:
               base_sha = os.environ.get("PR_BASE_SHA")
               if not base_sha:
                   return None
-              result = subprocess.run(
-                  ["git", "show", f"{base_sha}:.axiom/toolchain.toml"],
+              object_name = f"{base_sha}:.axiom/toolchain.toml"
+              mode_result = subprocess.run(
+                  ["git", "ls-tree", base_sha, "--", ".axiom/toolchain.toml"],
                   check=False,
                   stdout=subprocess.PIPE,
                   stderr=subprocess.DEVNULL,
                   text=True,
               )
+              if mode_result.returncode != 0 or not mode_result.stdout.strip():
+                  return None
+              entry_mode = mode_result.stdout.split(maxsplit=1)[0]
+              if entry_mode not in {"100644", "100755"}:
+                  fail(
+                      "protected-base .axiom/toolchain.toml must be a regular "
+                      f"blob, not Git mode {entry_mode}"
+                  )
+              size_result = subprocess.run(
+                  ["git", "cat-file", "-s", object_name],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if size_result.returncode != 0:
+                  return None
+              try:
+                  object_size = int(size_result.stdout.strip())
+              except ValueError:
+                  fail("could not determine protected-base toolchain size")
+              if object_size > MAX_TOOLCHAIN_BYTES:
+                  fail("protected-base .axiom/toolchain.toml exceeds 64 KiB")
+              result = subprocess.run(
+                  ["git", "show", object_name],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+              )
               if result.returncode != 0:
                   return None
-              return load_toolchain(result.stdout)
+              if len(result.stdout) > MAX_TOOLCHAIN_BYTES:
+                  fail("protected-base .axiom/toolchain.toml exceeds 64 KiB")
+              try:
+                  text = result.stdout.decode("utf-8")
+              except UnicodeError:
+                  fail("protected-base .axiom/toolchain.toml must be valid UTF-8")
+              return load_toolchain(text)
 
-          if not TOOLCHAIN_PATH.is_file():
-              fail("every RuleSpec repository must define .axiom/toolchain.toml")
           base_config = base_toolchain()
-          config = load_toolchain(TOOLCHAIN_PATH.read_text())
+          config = load_toolchain(read_head_toolchain())
           source = str(TOOLCHAIN_PATH)
 
           resolved = {
@@ -424,51 +513,6 @@ jobs:
           ref: ${{ steps.toolchain.outputs.rulespec_us_ref }}
           path: _axiom/rulespec-us
 
-      - name: Verify named corpus release selector
-        shell: bash
-        env:
-          AXIOM_CORPUS_RELEASE_SELECTOR: ${{ steps.toolchain.outputs.axiom_corpus_release_selector }}
-        run: |
-          set -euo pipefail
-          python -I - <<'PY'
-          import json
-          import os
-          import stat
-          import sys
-          from pathlib import Path
-
-          root = Path("_axiom/axiom-corpus").resolve(strict=True)
-          name = os.environ["AXIOM_CORPUS_RELEASE_SELECTOR"]
-          path = root / "manifests" / "releases" / f"{name}.json"
-          if path.is_symlink():
-              print(f"Corpus release selector must not be a symlink: {path}", file=sys.stderr)
-              sys.exit(1)
-          try:
-              metadata = path.stat()
-          except OSError:
-              print(f"Named corpus release selector not found: {path}", file=sys.stderr)
-              sys.exit(1)
-          if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > 4 * 1024 * 1024:
-              print(f"Corpus release selector is not a bounded regular file: {path}", file=sys.stderr)
-              sys.exit(1)
-          try:
-              payload = json.loads(path.read_text(encoding="utf-8"))
-          except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-              print(f"Corpus release selector is not valid UTF-8 JSON: {exc}", file=sys.stderr)
-              sys.exit(1)
-          if not isinstance(payload, dict) or payload.get("name") != name:
-              print(
-                  f"Corpus release selector identity does not match {name!r}: {path}",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-          scopes = payload.get("scopes")
-          if not isinstance(scopes, list) or not scopes:
-              print(f"Corpus release selector has no active scopes: {path}", file=sys.stderr)
-              sys.exit(1)
-          print(f"Verified named corpus release selector {name!r} with {len(scopes)} scope(s).")
-          PY
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -486,6 +530,34 @@ jobs:
             --project _axiom/axiom-encode
           echo "$GITHUB_WORKSPACE/_axiom/axiom-encode/.venv/bin" >> "$GITHUB_PATH"
 
+      - name: Verify named corpus release with pinned encoder
+        shell: bash
+        env:
+          EXPECTED_CORPUS_RELEASE: ${{ steps.toolchain.outputs.axiom_corpus_release_selector }}
+        run: |
+          set -euo pipefail
+          python -I - <<'PY'
+          import os
+          from pathlib import Path
+
+          from axiom_encode.toolchain import load_rulespec_local_corpus_release
+
+          release = load_rulespec_local_corpus_release(
+              Path.cwd(),
+              Path("_axiom/axiom-corpus"),
+          )
+          expected = os.environ["EXPECTED_CORPUS_RELEASE"]
+          if release.name != expected:
+              raise SystemExit(
+                  "Resolved corpus release does not match bootstrap selector: "
+                  f"{release.name!r} != {expected!r}"
+              )
+          print(
+              f"Verified named corpus release {release.name!r} "
+              f"({release.selector.sha256})."
+          )
+          PY
+
       - name: Build axiom-rules-engine
         working-directory: _axiom/axiom-rules-engine
         run: cargo build --verbose
@@ -498,7 +570,6 @@ jobs:
         run: |
           set -euo pipefail
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" "$GITHUB_WORKSPACE/../axiom-rules-engine"
-          ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
           if [ "$(basename "$GITHUB_WORKSPACE")" != "rulespec-us" ]; then
             ln -sfn "$GITHUB_WORKSPACE/_axiom/rulespec-us" "$GITHUB_WORKSPACE/../rulespec-us"
           fi
@@ -515,8 +586,6 @@ jobs:
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha || '' }}
           PUSH_BEFORE_SHA: ${{ github.event.before || '' }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
-          AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
-          AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
           set -euo pipefail
 
@@ -833,48 +902,6 @@ jobs:
             )
           }
 
-          classify_toolchain_change() {
-            python -I - "$base_ref" <<'PY'
-          import subprocess
-          import sys
-          import tomllib
-          from pathlib import Path
-
-          base_ref = sys.argv[1]
-          path = Path(".axiom/toolchain.toml")
-          result = subprocess.run(
-              ["git", "show", f"{base_ref}:.axiom/toolchain.toml"],
-              check=False,
-              stdout=subprocess.PIPE,
-              stderr=subprocess.DEVNULL,
-          )
-          if result.returncode != 0 or not path.exists():
-              print("full")
-              raise SystemExit
-
-          def load(text: bytes) -> dict[str, object]:
-              payload = tomllib.loads(text.decode())
-              table = payload.get("toolchain", payload)
-              if not isinstance(table, dict):
-                  return {}
-              return table
-
-          before = load(result.stdout)
-          after = load(path.read_bytes())
-          changed = {
-              key for key in set(before) | set(after)
-              if before.get(key) != after.get(key)
-          }
-          if changed and changed <= {
-              "axiom_corpus_ref",
-              "axiom_corpus_release_selector",
-          }:
-              print("corpus-only")
-          else:
-              print("full")
-          PY
-          }
-
           mode="full-push"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_ref="${{ github.event.pull_request.base.sha }}"
@@ -889,12 +916,10 @@ jobs:
                   break
                   ;;
                 .axiom/toolchain.toml)
-                  if [ "$(classify_toolchain_change)" = "corpus-only" ]; then
-                    mode="changed-corpus-toolchain-bump"
-                  else
-                    mode="full-toolchain-bump"
-                    break
-                  fi
+                  # Every toolchain change can alter the evidence graph or the
+                  # validators themselves. Re-run the entire repository.
+                  mode="full-toolchain-bump"
+                  break
                   ;;
               esac
             done
@@ -937,8 +962,6 @@ jobs:
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
-          AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
-          AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
           set -euo pipefail
 
@@ -1012,12 +1035,10 @@ jobs:
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
             "${selected[@]}"
 
-      - name: Validate RuleSpec proofs and claims
+      - name: Validate RuleSpec proofs
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
-          AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
-          AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
         run: |
           set -euo pipefail
 
