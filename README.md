@@ -40,9 +40,6 @@ jobs:
       axiom-corpus-ref: <40-character-commit-sha>
       rulespec-us-ref: <40-character-commit-sha>
       corpus-release-base-url: <https-r2-bucket-base-url>
-      apply-signing-public-key: <ed25519-public-key>
-      eval-signing-public-key: <ed25519-public-key>
-      corpus-release-public-key: <ed25519-public-key>
 ```
 
 By default, the workflow validates RuleSpec YAML under `statutes/`,
@@ -71,6 +68,12 @@ corpus checkout's matching `releases/<name>/<content_sha256>.json` path. It
 checks the content address and release name immediately; the protected
 verification supervisor then verifies its Ed25519 signature and supplies all
 three public trust roots without exposing signing capability.
+
+Configure those protected roots as `AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY`,
+`AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY`, and
+`AXIOM_CORPUS_RELEASE_PUBLIC_KEY` organization or repository variables. They
+are deliberately not workflow-call inputs, so a caller change cannot replace
+its own verification roots.
 
 `known-validation-gaps.yaml` is mandatory and its exact bytes must hash to
 `validation_waiver_set_sha256`. On a pull request, the encoder's typed waiver

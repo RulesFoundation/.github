@@ -28,18 +28,6 @@ on:
         description: HTTPS base URL of the public R2 bucket containing releases/.
         required: true
         type: string
-      apply-signing-public-key:
-        description: Protected Ed25519 apply-manifest verification root.
-        required: true
-        type: string
-      eval-signing-public-key:
-        description: Protected Ed25519 evaluation verification root.
-        required: true
-        type: string
-      corpus-release-public-key:
-        description: Protected Ed25519 corpus-release verification root.
-        required: true
-        type: string
       validate-roots:
         description: >-
           Space-separated repository roots containing RuleSpec YAML, or
@@ -554,9 +542,9 @@ jobs:
       - name: Provision protected verification supervisor
         working-directory: _axiom/axiom-encode
         env:
-          TRUST_APPLY_ROOT: ${{ inputs.apply-signing-public-key }}
-          TRUST_EVAL_ROOT: ${{ inputs.eval-signing-public-key }}
-          TRUST_CORPUS_RELEASE_ROOT: ${{ inputs.corpus-release-public-key }}
+          TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
+          TRUST_EVAL_ROOT: ${{ vars.AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY }}
+          TRUST_CORPUS_RELEASE_ROOT: ${{ vars.AXIOM_CORPUS_RELEASE_PUBLIC_KEY }}
         run: |
           set -euo pipefail
           test -n "$TRUST_APPLY_ROOT" && test -n "$TRUST_EVAL_ROOT" && test -n "$TRUST_CORPUS_RELEASE_ROOT"
