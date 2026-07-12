@@ -618,7 +618,11 @@ jobs:
           # boundary — which every CI workspace does. Provision the runner's
           # git binary alongside the trusted tools so those probes fail closed
           # on identity, not on a missing binary.
-          sudo install -m 0755 "$(command -v git)" /opt/axiom-verification/git
+          # With a provisioned python runtime the supervisor rewrites exec to
+          # the trusted interpreter, so the child's PATH (= dirname of the
+          # exec'd command) is the runtime's bin directory — install git
+          # THERE, not at the verification root.
+          sudo install -m 0755 "$(command -v git)" /opt/axiom-verification/python/bin/git
           sudo chown root:root /opt
           sudo chmod go-w /opt
 
