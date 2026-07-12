@@ -16,7 +16,7 @@ validation.
 | [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-assisted RuleSpec encoding and validation tooling. |
 | [axiom-scrapers](https://github.com/TheAxiomFoundation/axiom-scrapers) | Ingestion tooling for collecting and normalizing legal source text. |
 
-## Rule Repositories
+## Rule repositories
 
 | Repo | Coverage |
 | --- | --- |
@@ -33,40 +33,60 @@ calls the centralized reusable workflow in this repository:
 ```yaml
 jobs:
   validate:
-    uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@<published-validation-tag>
-    secrets: inherit
+    uses: TheAxiomFoundation/.github/.github/workflows/validate-rulespec.yml@<workflow-commit-sha>
+    with:
+      axiom-encode-ref: <40-character-commit-sha>
+      axiom-rules-engine-ref: <40-character-commit-sha>
+      axiom-corpus-ref: <40-character-commit-sha>
+      rulespec-us-ref: <40-character-commit-sha>
+      corpus-release-base-url: <https-r2-bucket-base-url>
 ```
 
 By default, the workflow validates RuleSpec YAML under `statutes/`,
 `regulations/`, and `policies/`.
 
-Use a published validation workflow tag, not `main`; the first release tag for
-this rollout is expected to be `rulespec-validate-v1` after the workflow release
-PR merges.
+Pin the reusable workflow itself by commit SHA. The workflow accepts no mutable
+dependency refs: each dependency input must be a full commit SHA, and the
+checked-out commit must be an ancestor of that repository's remotely advertised
+default branch. Format-only ref validation is not sufficient.
 
 Rules repositories should pin their Axiom toolchain in `.axiom/toolchain.toml`:
 
 ```toml
 [toolchain]
-axiom_encode_version = "0.1.0"
-axiom_encode_ref = "v0.1.0"
-axiom_rules_engine_ref = "v0.1.0"
-axiom_corpus_ref = "v0.1.0"
-rulespec_us_ref = "v0.1.0"
+axiom_corpus_release = "us-rulespec-2026-07-10"
+axiom_corpus_release_content_sha256 = "<64-character-lowercase-sha256>"
+validation_waiver_set_sha256 = "<sha256-of-exact-known-validation-gaps.yaml-bytes>"
 ```
 
-When this file exists, the reusable workflow rejects branch refs such as `main`
-and verifies that `axiom_encode_version` matches the checked-out
-`axiom-encode` package. Pull requests that change `.axiom/toolchain.toml` or the
-caller workflow run full RuleSpec validation rather than changed-file-only
-validation, so toolchain bumps expose every file that needs re-encoding.
+This table is mandatory and must contain exactly those three keys. The workflow
+does not accept dependency refs, versions, selector aliases, or nested ref
+tables in it. Before running the encoder, the workflow downloads the exact
+signed object from
+`<corpus-release-base-url>/releases/<name>/<content_sha256>.json` into the
+corpus checkout's matching `releases/<name>/<content_sha256>.json` path. It
+checks the content address and release name immediately; the protected
+verification supervisor then verifies its Ed25519 signature and supplies all
+three public trust roots without exposing signing capability.
+
+Configure those protected roots as `AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY`,
+`AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY`, and
+`AXIOM_CORPUS_RELEASE_PUBLIC_KEY` organization or repository variables. They
+are deliberately not workflow-call inputs, so a caller change cannot replace
+its own verification roots.
+
+`known-validation-gaps.yaml` is mandatory and its exact bytes must hash to
+`validation_waiver_set_sha256`. On a pull request, the encoder's typed waiver
+audit compares it with the protected base revision and rejects any new or
+broadened waiver; entries may only be removed. A toolchain or caller-workflow
+change runs full RuleSpec validation so a release or waiver-set change cannot
+hide behind changed-file selection.
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved
 roots, obsolete generated formula artifacts, manual RuleSpec YAML edits without
-a signed `axiom-encode --apply` manifest, and unclassified PolicyEngine oracle
-coverage. Rules repos using this workflow need the
-`AXIOM_ENCODE_APPLY_SIGNING_KEY` secret. New executable outputs must either have
+an Ed25519-signed `axiom-encode --apply` manifest, and unclassified PolicyEngine
+oracle coverage. New executable outputs must either have
 an exact PolicyEngine mapping or a harness-side `not_comparable` classification
 with a rationale.
 
