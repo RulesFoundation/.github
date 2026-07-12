@@ -342,7 +342,24 @@ jobs:
               )
               if result.returncode != 0:
                   return None
-              return load_toolchain(result.stdout)
+              # A base branch that predates the canonical-toolchain migration
+              # carries an old-schema toolchain. For the removal-guard below,
+              # that is equivalent to "no canonical toolchain yet": only a base
+              # whose toolchain already conforms to the strict schema may be
+              # forbidden from dropping it. Parse the base softly (key set only)
+              # so the very PR that performs the migration is not rejected for
+              # the base still being pre-migration. Any base already on the
+              # protected branch necessarily passed strict validation to land,
+              # so an exact EXPECTED_KEYS match is a sufficient "is migrated"
+              # signal here.
+              try:
+                  payload = tomllib.loads(result.stdout.decode("utf-8"))
+              except (UnicodeError, tomllib.TOMLDecodeError):
+                  return None
+              table = payload.get("toolchain")
+              if not isinstance(table, dict) or set(table) != EXPECTED_KEYS:
+                  return None
+              return table
 
           base_config = base_toolchain()
           if not TOOLCHAIN_PATH.is_file() or TOOLCHAIN_PATH.is_symlink():
