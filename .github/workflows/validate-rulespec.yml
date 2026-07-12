@@ -876,8 +876,15 @@ jobs:
                   growth.append(str(module))
                   continue
               for state, metadata in head_states.items():
-                  if base_states.get(state) != metadata:
-                      growth.append(f"{module}:{state}")
+                  if base_states.get(state) == metadata:
+                      continue
+                  if state == "active" and base_states.get("pending") == metadata:
+                      # A protected-base pending approval being consumed
+                      # (pending -> active) is the sanctioned transition; the
+                      # supervised audit still enforces the full protocol
+                      # (exact consumption, expiry, waiver-only approvals).
+                      continue
+                  growth.append(f"{module}:{state}")
           if growth:
               raise SystemExit(
                   "ValidationWaiverRatchetGrowth: waivers may only shrink; "
