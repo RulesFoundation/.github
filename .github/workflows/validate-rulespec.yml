@@ -255,6 +255,20 @@ jobs:
         shard: ${{ fromJSON(needs.shards.outputs.matrix) }}
 
     steps:
+      # This job stacks four dependency checkouts, Go + Rust toolchains, an
+      # isolated verification runtime, and an engine build on one ~14 GB
+      # runner disk; reclaim the preinstalled bloat first or the runner dies
+      # mid-job with "No space left on device" (and no usable step logs).
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Disk before cleanup:" && df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+          echo "Disk after cleanup:" && df -h /
+
       - name: Checkout rules repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
