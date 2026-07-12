@@ -930,7 +930,8 @@ jobs:
             --repo "$GITHUB_WORKSPACE" \
             --base-ref "$base_ref" \
             --head-ref "$GITHUB_SHA" \
-            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus"
+            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
+            --expected-encoder-checkout "$GITHUB_WORKSPACE/_axiom/axiom-encode"
 
       - name: Select RuleSpec validation targets
         id: validation_targets
