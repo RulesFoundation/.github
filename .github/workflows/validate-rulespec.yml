@@ -611,6 +611,14 @@ jobs:
           # ancestors, and /opt ships group-writable on hosted runners.
           # Harden the directory bit itself (contents are untouched; nothing
           # later in this job creates new /opt entries).
+          # The supervised child's PATH is exactly the trusted tool directory
+          # (the supervisor exports no ambient PATH), and the checkout-identity
+          # probes shell out to git builtins (rev-parse --show-toplevel,
+          # remote get-url origin) whenever a module sits inside a git
+          # boundary — which every CI workspace does. Provision the runner's
+          # git binary alongside the trusted tools so those probes fail closed
+          # on identity, not on a missing binary.
+          sudo install -m 0755 "$(command -v git)" /opt/axiom-verification/git
           sudo chown root:root /opt
           sudo chmod go-w /opt
 
