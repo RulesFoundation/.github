@@ -26,7 +26,11 @@ on:
         type: string
       corpus-release-base-url:
         description: HTTPS base URL of the public R2 bucket containing releases/.
-        required: true
+        # Interim r2.dev URL for the dedicated axiom-corpus-releases bucket;
+        # switch to https://corpus.axiom-foundation.org once the custom domain
+        # is bound (needs the R2 bucket in the axiom-foundation.org zone account).
+        required: false
+        default: https://pub-a8952f8657fc49fda358146ac001366c.r2.dev
         type: string
       validate-roots:
         description: >-
