@@ -956,6 +956,13 @@ jobs:
           add_rulespec_target() {
             local path="$1"
             case "$path" in
+              # Composition specs (the programs root, canonically nested
+              # under the jurisdiction dir) are axiom-compose inputs, not
+              # atomic RuleSpec modules — the encoder rejects them from
+              # atomic validation by design.
+              */programs/*|programs/*) return ;;
+            esac
+            case "$path" in
               *.test.yaml)
                 add_existing_file "$path" "$test_file_list"
                 add_existing_file "${path%.test.yaml}.yaml" "$rulespec_file_list"
@@ -982,7 +989,8 @@ jobs:
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
                   find "$root" -type f \( -name "*.yaml" -o -name "*.yml" \) \
-                    ! -name "*.test.yaml" ! -name "*.test.yml"
+                    ! -name "*.test.yaml" ! -name "*.test.yml" \
+                    ! -path "*/programs/*"
                 fi
               done
             )
@@ -991,7 +999,8 @@ jobs:
             done < <(
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
-                  find "$root" -type f \( -name "*.test.yaml" -o -name "*.test.yml" \)
+                  find "$root" -type f \( -name "*.test.yaml" -o -name "*.test.yml" \) \
+                    ! -path "*/programs/*"
                 fi
               done
             )
