@@ -1204,7 +1204,9 @@ jobs:
           declare -A by_root=()
           for test_file in "${selected[@]}"; do
             jurisdiction="${test_file%%/*}"
-            by_root[$jurisdiction]+="$test_file"$'\n'
+            # Paths are resolved relative to --root, so strip the
+            # jurisdiction prefix or they double up (<root>/dk/dk/...).
+            by_root[$jurisdiction]+="${test_file#"$jurisdiction"/}"$'\n'
           done
           for jurisdiction in "${!by_root[@]}"; do
             mapfile -t group <<< "${by_root[$jurisdiction]%$'\n'}"
