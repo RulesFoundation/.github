@@ -607,6 +607,12 @@ jobs:
             --corpus-release-root "$TRUST_CORPUS_RELEASE_ROOT"
           sudo chown -R 0:0 /opt/axiom-verification
           sudo chmod -R go-w /opt/axiom-verification
+          # The supervisor refuses a trust chain with group/other-writable
+          # ancestors, and /opt ships group-writable on hosted runners.
+          # Harden the directory bit itself (contents are untouched; nothing
+          # later in this job creates new /opt entries).
+          sudo chown root:root /opt
+          sudo chmod go-w /opt
 
       - name: Build axiom-rules-engine
         working-directory: _axiom/axiom-rules-engine
