@@ -1197,10 +1197,22 @@ jobs:
             exit 0
           fi
 
-          axiom-encode test \
-            --root "$GITHUB_WORKSPACE" \
-            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
-            "${selected[@]}"
+          # The hard-cut encoder requires --root to be the exact jurisdiction
+          # content root (rulespec-<country>/<jurisdiction>), not the checkout;
+          # group the selected companion tests by their jurisdiction directory
+          # and run one invocation per group.
+          declare -A by_root=()
+          for test_file in "${selected[@]}"; do
+            jurisdiction="${test_file%%/*}"
+            by_root[$jurisdiction]+="$test_file"$'\n'
+          done
+          for jurisdiction in "${!by_root[@]}"; do
+            mapfile -t group <<< "${by_root[$jurisdiction]%$'\n'}"
+            axiom-encode test \
+              --root "$GITHUB_WORKSPACE/$jurisdiction" \
+              --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
+              "${group[@]}"
+          done
 
       - name: Validate RuleSpec proofs and claims
         shell: bash
