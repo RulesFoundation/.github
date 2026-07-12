@@ -1266,7 +1266,8 @@ jobs:
                 money_atom_files+=("$path")
               done < <(
                 find "$root" -type f \( -name "*.yaml" -o -name "*.yml" \) \
-                  ! -name "*.test.yaml" ! -name "*.test.yml"
+                  ! -name "*.test.yaml" ! -name "*.test.yml" \
+                  ! -path "*/programs/*"
               )
             fi
           done
