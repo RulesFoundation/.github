@@ -380,6 +380,7 @@ jobs:
           AXIOM_CORPUS_SHA: ${{ inputs.axiom-corpus-ref }}
           RULESPEC_US_SHA: ${{ inputs.rulespec-us-ref }}
           RELEASE_BASE_URL: ${{ inputs.corpus-release-base-url }}
+          PYTHON_VERSION: ${{ inputs.python-version }}
         run: |
           set -euo pipefail
           for value in "$AXIOM_ENCODE_SHA" "$AXIOM_RULES_ENGINE_SHA" "$AXIOM_CORPUS_SHA" "$RULESPEC_US_SHA"; do
@@ -388,6 +389,12 @@ jobs:
               exit 1
             fi
           done
+          # python-version is spliced into many run: blocks; bound it to major.minor
+          # so a caller cannot smuggle shell into those steps (fail-open / RCE).
+          if [[ ! "$PYTHON_VERSION" =~ ^3\.[0-9]+$ ]]; then
+            echo "python-version must be a bare major.minor like 3.14: $PYTHON_VERSION" >&2
+            exit 1
+          fi
           case "$RELEASE_BASE_URL" in
             https://*) ;;
             *) echo "corpus-release-base-url must use HTTPS" >&2; exit 1 ;;
