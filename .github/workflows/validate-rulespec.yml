@@ -594,7 +594,12 @@ jobs:
             -o "$RUNNER_TEMP/axiom-encode-signing-supervisor" \
             ./cmd/axiom-encode-signing-supervisor
           sudo rm -rf /opt/axiom-verification
-          sudo python scripts/provision_verification_supervisor.py \
+          # sudo resets PATH (secure_path), so a bare `python` under sudo is
+          # the SYSTEM interpreter — and the provision script copies the
+          # invoking interpreter's sys.base_prefix, i.e. it would copytree
+          # /usr until the runner disk dies. Resolve the setup-python
+          # interpreter in this shell and pass its absolute path through.
+          sudo "$(command -v python)" scripts/provision_verification_supervisor.py \
             --destination /opt/axiom-verification \
             --supervisor "$RUNNER_TEMP/axiom-encode-signing-supervisor" \
             --site-packages "$RUNNER_TEMP/axiom-verification-site-packages" \
