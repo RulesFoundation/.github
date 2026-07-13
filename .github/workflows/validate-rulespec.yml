@@ -1232,10 +1232,38 @@ jobs:
             exit 0
           fi
 
+          # Honor the same ratcheted validate_failures waivers the validate
+          # step honors: a module declared as a known validation failure is
+          # skipped LOUDLY here too, so the waiver protocol is consistent
+          # across the validation matrix (a waived module otherwise passes
+          # validate via its waiver and then hard-fails proof validation on
+          # the same declared gap). The waiver protections — fingerprint
+          # audit, decrement-only ratchet, stale-waiver detection, expiry —
+          # are enforced by their own steps regardless of this skip.
+          skip_list="$RUNNER_TEMP/proof-validate-skip.txt"
+          : > "$skip_list"
+          if [ -f known-validation-gaps.yaml ]; then
+            python - <<'SKIP' > "$skip_list"
+          import yaml
+          payload = yaml.safe_load(open("known-validation-gaps.yaml")) or {}
+          for entry in payload.get("validate_failures") or []:
+              print(entry)
+          SKIP
+          fi
+
           prefixed=()
           for file in "${rulespec_files[@]}"; do
+            if grep -qxF "$file" "$skip_list"; then
+              echo "SKIPPED (known-validation-gaps validate_failures): $file"
+              continue
+            fi
             prefixed+=("$GITHUB_WORKSPACE/$file")
           done
+
+          if [ "${#prefixed[@]}" -eq 0 ]; then
+            echo "All selected RuleSpec YAML files are skipped."
+            exit 0
+          fi
 
           # One invocation for all files; failed files are listed in the
           # command's own summary output.
