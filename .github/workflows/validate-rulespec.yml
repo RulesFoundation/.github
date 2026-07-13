@@ -1126,14 +1126,20 @@ jobs:
           # Ratcheted pre-existing validate failures: repos may list files in
           # known-validation-gaps.yaml under `validate_failures` (each needs
           # an issue link in that file). Listed files are skipped LOUDLY.
+          # Only ACTIVE waivers skip: a pending-only record is approved on
+          # the protected base but not yet consumed by this branch, so its
+          # module still validates (and fails) here.
           skip_list="$RUNNER_TEMP/validate-skip.txt"
           : > "$skip_list"
           if [ -f known-validation-gaps.yaml ]; then
             python - <<'SKIP' > "$skip_list"
           import yaml
           payload = yaml.safe_load(open("known-validation-gaps.yaml")) or {}
-          for entry in payload.get("validate_failures") or []:
-              print(entry)
+          failures = payload.get("validate_failures") or {}
+          if isinstance(failures, dict):
+              for module, states in failures.items():
+                  if isinstance(states, dict) and "active" in states:
+                      print(module)
           SKIP
           fi
 
@@ -1240,14 +1246,20 @@ jobs:
           # the same declared gap). The waiver protections — fingerprint
           # audit, decrement-only ratchet, stale-waiver detection, expiry —
           # are enforced by their own steps regardless of this skip.
+          # Only ACTIVE waivers skip: a pending-only record is approved on
+          # the protected base but not yet consumed by this branch, so its
+          # module still proof-validates (and fails) here.
           skip_list="$RUNNER_TEMP/proof-validate-skip.txt"
           : > "$skip_list"
           if [ -f known-validation-gaps.yaml ]; then
             python - <<'SKIP' > "$skip_list"
           import yaml
           payload = yaml.safe_load(open("known-validation-gaps.yaml")) or {}
-          for entry in payload.get("validate_failures") or []:
-              print(entry)
+          failures = payload.get("validate_failures") or {}
+          if isinstance(failures, dict):
+              for module, states in failures.items():
+                  if isinstance(states, dict) and "active" in states:
+                      print(module)
           SKIP
           fi
 
