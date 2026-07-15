@@ -32,6 +32,19 @@ on:
         required: false
         default: https://pub-a8952f8657fc49fda358146ac001366c.r2.dev
         type: string
+      corpus-release-registry-url:
+        description: >-
+          Optional HTTPS Supabase project URL whose public corpus.release_objects
+          registry is used instead of corpus-release-base-url.
+        required: false
+        default: ""
+        type: string
+      corpus-release-registry-anon-key:
+        description: >-
+          Public Supabase anon key required when corpus-release-registry-url is set.
+        required: false
+        default: ""
+        type: string
       validate-roots:
         description: >-
           Space-separated repository roots containing RuleSpec YAML, or
@@ -411,6 +424,8 @@ jobs:
           AXIOM_CORPUS_SHA: ${{ inputs.axiom-corpus-ref }}
           RULESPEC_US_SHA: ${{ inputs.rulespec-us-ref }}
           RELEASE_BASE_URL: ${{ inputs.corpus-release-base-url }}
+          RELEASE_REGISTRY_URL: ${{ inputs.corpus-release-registry-url }}
+          RELEASE_REGISTRY_ANON_KEY: ${{ inputs.corpus-release-registry-anon-key }}
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: |
           set -euo pipefail
@@ -426,10 +441,25 @@ jobs:
             echo "python-version must be a bare major.minor like 3.14: $PYTHON_VERSION" >&2
             exit 1
           fi
-          case "$RELEASE_BASE_URL" in
-            https://*) ;;
-            *) echo "corpus-release-base-url must use HTTPS" >&2; exit 1 ;;
-          esac
+          if [ -n "$RELEASE_REGISTRY_URL" ]; then
+            case "$RELEASE_REGISTRY_URL" in
+              https://*) ;;
+              *) echo "corpus-release-registry-url must use HTTPS" >&2; exit 1 ;;
+            esac
+            if [ -z "$RELEASE_REGISTRY_ANON_KEY" ]; then
+              echo "corpus-release-registry-anon-key is required with corpus-release-registry-url" >&2
+              exit 1
+            fi
+          else
+            if [ -n "$RELEASE_REGISTRY_ANON_KEY" ]; then
+              echo "corpus-release-registry-anon-key requires corpus-release-registry-url" >&2
+              exit 1
+            fi
+            case "$RELEASE_BASE_URL" in
+              https://*) ;;
+              *) echo "corpus-release-base-url must use HTTPS" >&2; exit 1 ;;
+            esac
+          fi
 
       - name: Checkout axiom-encode
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -512,26 +542,55 @@ jobs:
         shell: bash
         env:
           RELEASE_BASE_URL: ${{ inputs.corpus-release-base-url }}
+          RELEASE_REGISTRY_URL: ${{ inputs.corpus-release-registry-url }}
+          RELEASE_REGISTRY_ANON_KEY: ${{ inputs.corpus-release-registry-anon-key }}
           RELEASE_NAME: ${{ steps.toolchain.outputs.axiom_corpus_release }}
           RELEASE_CONTENT_SHA256: ${{ steps.toolchain.outputs.axiom_corpus_release_content_sha256 }}
         run: |
           set -euo pipefail
           destination="$GITHUB_WORKSPACE/_axiom/axiom-corpus/releases/$RELEASE_NAME/$RELEASE_CONTENT_SHA256.json"
           mkdir -p "$(dirname "$destination")"
-          url="${RELEASE_BASE_URL%/}/releases/$RELEASE_NAME/$RELEASE_CONTENT_SHA256.json"
-          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-            --output "$destination.tmp" "$url"
-          python - "$destination.tmp" "$RELEASE_NAME" "$RELEASE_CONTENT_SHA256" <<'PY'
+          if [ -n "$RELEASE_REGISTRY_URL" ]; then
+            acquisition=registry
+            url="${RELEASE_REGISTRY_URL%/}/rest/v1/release_objects?select=release_object&release_name=eq.${RELEASE_NAME}&content_sha256=eq.${RELEASE_CONTENT_SHA256}&limit=2"
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              --header "apikey: $RELEASE_REGISTRY_ANON_KEY" \
+              --header "Authorization: Bearer $RELEASE_REGISTRY_ANON_KEY" \
+              --header "Accept-Profile: corpus" \
+              --output "$destination.tmp" "$url"
+          else
+            acquisition=object
+            url="${RELEASE_BASE_URL%/}/releases/$RELEASE_NAME/$RELEASE_CONTENT_SHA256.json"
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              --output "$destination.tmp" "$url"
+          fi
+          python - "$destination.tmp" "$RELEASE_NAME" "$RELEASE_CONTENT_SHA256" "$acquisition" <<'PY'
           import hashlib
           import json
           import sys
           from pathlib import Path
 
-          path, expected_name, expected_sha = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+          path, expected_name, expected_sha, acquisition = (
+              Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+          )
           try:
-              payload = json.loads(path.read_bytes())
+              response = json.loads(path.read_bytes())
           except (OSError, json.JSONDecodeError) as exc:
               raise SystemExit(f"Corpus release acquisition error: invalid JSON: {exc}")
+          if acquisition == "registry":
+              if (
+                  not isinstance(response, list)
+                  or len(response) != 1
+                  or not isinstance(response[0], dict)
+              ):
+                  raise SystemExit(
+                      "Corpus release acquisition error: registry did not return exactly one row"
+                  )
+              payload = response[0].get("release_object")
+          else:
+              payload = response
+          if not isinstance(payload, dict):
+              raise SystemExit("Corpus release acquisition error: missing release object")
           if payload.get("release") != expected_name:
               raise SystemExit("Corpus release acquisition error: release name mismatch")
           content = payload.get("content")
@@ -545,6 +604,7 @@ jobs:
                   f"Corpus release acquisition error: content sha256 mismatch "
                   f"({actual} != {expected_sha})"
               )
+          path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
           path.replace(path.with_suffix(""))
           PY
 
