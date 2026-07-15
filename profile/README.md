@@ -16,7 +16,7 @@ In pipeline order — sources in, executable programs out:
 | [axiom-scrapers](https://github.com/TheAxiomFoundation/axiom-scrapers) | Ingestion tooling for collecting and normalizing legal source text. |
 | [axiom-corpus](https://github.com/TheAxiomFoundation/axiom-corpus) | Legal source corpus: statutes, regulations, and guidance with canonical citation paths. |
 | [axiom-bills](https://github.com/TheAxiomFoundation/axiom-bills) | Live bill tracking for federal and state legislatures. |
-| [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-assisted RuleSpec encoding and validation tooling. |
+| [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-driven RuleSpec encoding and validation tooling. |
 | [axiom-rules-engine](https://github.com/TheAxiomFoundation/axiom-rules-engine) | RuleSpec compiler and runtime. |
 | [axiom-programs](https://github.com/TheAxiomFoundation/axiom-programs) | Declarative compose specs assembling atomic rules into benefit and tax programs. |
 | [axiom-compose](https://github.com/TheAxiomFoundation/axiom-compose) | Deterministic program composer: spec + encodings → runnable program. |
