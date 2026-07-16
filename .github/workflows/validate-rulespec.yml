@@ -179,7 +179,7 @@ jobs:
               EVENT_NAME="$EVENT_NAME" \
               PR_BASE_SHA="$PR_BASE_SHA" \
               HEAD_SHA="$HEAD_SHA" \
-              python3 <<'PY'
+              python3 -I - <<'PY'
           import os
           import subprocess
           import sys
@@ -264,7 +264,7 @@ jobs:
           SELECTED_ROOTS="${selected_roots[*]}" \
           ROOTS="$roots" \
           ALLOWED_EXTRA="$allowed_extra" \
-          python3 <<'PY'
+          python3 -I - <<'PY'
           import json
           import os
           import sys
@@ -438,12 +438,357 @@ jobs:
               )
           PY
 
+  provision:
+    name: provision
+    runs-on: ubuntu-latest
+    # Do not let an optional centralized checkout/build/upload hold every
+    # validation leg behind GitHub's multi-hour default job timeout.
+    timeout-minutes: 30
+    # The cache is an optimization only. If this centralized attempt has any
+    # transient failure, every validation leg runs the original fresh path.
+    continue-on-error: true
+    outputs:
+      cache-ready: ${{ steps.result.outputs.cache-ready }}
+      cache-key: ${{ steps.result.outputs.cache-key }}
+      manifest-sha256: ${{ steps.result.outputs.manifest-sha256 }}
+      python-version: ${{ steps.result.outputs.python-version }}
+    steps:
+      - name: Initialize same-run cache authority
+        id: policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "eligible=true" >> "$GITHUB_OUTPUT"
+          echo "Fresh authority will provision one run-scoped validation tree."
+
+      - name: Free runner disk space
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force >/dev/null 2>&1 || true
+
+      - name: Validate immutable provisioning inputs
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        shell: bash
+        env:
+          AXIOM_ENCODE_SHA: ${{ inputs.axiom-encode-ref }}
+          AXIOM_RULES_ENGINE_SHA: ${{ inputs.axiom-rules-engine-ref }}
+          PYTHON_VERSION: ${{ inputs.python-version }}
+          TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
+          TRUST_EVAL_ROOT: ${{ vars.AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY }}
+          TRUST_CORPUS_RELEASE_ROOT: ${{ vars.AXIOM_CORPUS_RELEASE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          for value in "$AXIOM_ENCODE_SHA" "$AXIOM_RULES_ENGINE_SHA"; do
+            if [[ ! "$value" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Provisioning refs must be exact lowercase commit SHAs: $value" >&2
+              exit 1
+            fi
+          done
+          if [[ ! "$PYTHON_VERSION" =~ ^3\.[0-9]+$ ]]; then
+            echo "python-version must be a bare major.minor like 3.14: $PYTHON_VERSION" >&2
+            exit 1
+          fi
+          test -n "$TRUST_APPLY_ROOT"
+          test -n "$TRUST_EVAL_ROOT"
+          test -n "$TRUST_CORPUS_RELEASE_ROOT"
+
+      - name: Set up Python
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        id: python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Checkout axiom-encode
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: TheAxiomFoundation/axiom-encode
+          ref: ${{ inputs.axiom-encode-ref }}
+          path: _axiom/axiom-encode
+          persist-credentials: false
+
+      - name: Checkout axiom-rules-engine
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: TheAxiomFoundation/axiom-rules-engine
+          ref: ${{ inputs.axiom-rules-engine-ref }}
+          path: _axiom/axiom-rules-engine
+          persist-credentials: false
+
+      - name: Authenticate provisioned dependency commits
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        shell: bash
+        env:
+          AXIOM_ENCODE_SHA: ${{ inputs.axiom-encode-ref }}
+          AXIOM_RULES_ENGINE_SHA: ${{ inputs.axiom-rules-engine-ref }}
+        run: |
+          set -euo pipefail
+          verify_ancestor() {
+            local repo="$1" expected="$2" default_branch
+            test "$(git -C "$repo" rev-parse HEAD)" = "$expected" || {
+              echo "$repo did not check out expected SHA $expected" >&2; return 1;
+            }
+            default_branch="$(git -C "$repo" ls-remote --symref origin HEAD | sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$#\1#p')"
+            test -n "$default_branch" || {
+              echo "Cannot resolve $repo default branch" >&2; return 1;
+            }
+            git -C "$repo" fetch --no-tags --unshallow origin \
+              "+refs/heads/$default_branch:refs/remotes/origin/$default_branch"
+            git -C "$repo" merge-base --is-ancestor \
+              "$expected" "refs/remotes/origin/$default_branch" || {
+                echo "$repo SHA $expected is not on protected branch $default_branch" >&2
+                return 1
+              }
+          }
+          verify_ancestor _axiom/axiom-encode "$AXIOM_ENCODE_SHA"
+          verify_ancestor _axiom/axiom-rules-engine "$AXIOM_RULES_ENGINE_SHA"
+
+      - name: Install Rust toolchain
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+
+      - name: Set up Go 1.26.1
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: 1.26.1
+          cache: false
+
+      - name: Stage protected axiom-encode install
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          rm -rf "$RUNNER_TEMP/axiom-verification-site-packages"
+          python -m pip install \
+            --target "$RUNNER_TEMP/axiom-verification-site-packages" \
+            ./_axiom/axiom-encode
+
+      - name: Build protected supervisor
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        working-directory: _axiom/axiom-encode
+        shell: bash
+        run: |
+          set -euo pipefail
+          CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags='-buildid=' \
+            -o "$RUNNER_TEMP/axiom-encode-signing-supervisor" \
+            ./cmd/axiom-encode-signing-supervisor
+
+      - name: Build axiom-rules-engine
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        working-directory: _axiom/axiom-rules-engine
+        run: cargo build --verbose
+
+      - name: Provision and record protected verification tree
+        id: provision_tree
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        working-directory: _axiom/axiom-encode
+        shell: bash
+        env:
+          TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
+          TRUST_EVAL_ROOT: ${{ vars.AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY }}
+          TRUST_CORPUS_RELEASE_ROOT: ${{ vars.AXIOM_CORPUS_RELEASE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          sudo rm -rf /opt/axiom-verification
+          # Resolve setup-python before sudo: secure_path would otherwise make
+          # the provisioner copy the system interpreter's /usr prefix.
+          sudo "$(command -v python)" scripts/provision_verification_supervisor.py \
+            --destination /opt/axiom-verification \
+            --supervisor "$RUNNER_TEMP/axiom-encode-signing-supervisor" \
+            --site-packages "$RUNNER_TEMP/axiom-verification-site-packages" \
+            --apply-root "$TRUST_APPLY_ROOT" --eval-root "$TRUST_EVAL_ROOT" \
+            --corpus-release-root "$TRUST_CORPUS_RELEASE_ROOT"
+          sudo install -m 0755 "$(command -v git)" \
+            /opt/axiom-verification/python/bin/git
+          sudo install -m 0755 \
+            "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine/target/debug/axiom-rules-engine" \
+            /opt/axiom-verification/axiom-rules-engine
+          sudo chown -R root:root /opt/axiom-verification
+          sudo chmod -R u+rwX,go+rX,go-w /opt/axiom-verification
+          sudo chown root:root /opt
+          sudo chmod go-w /opt
+
+          sudo "$(command -v python)" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import stat
+          from pathlib import Path
+
+          root = Path("/opt/axiom-verification")
+          manifest = root / ".axiom-verification-manifest.json"
+
+          def digest(path: Path) -> str:
+              value = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          root_stat = root.lstat()
+          if not stat.S_ISDIR(root_stat.st_mode) or root.is_symlink():
+              raise SystemExit("protected verification root is not a real directory")
+          entries = [
+              {
+                  "mode": stat.S_IMODE(root_stat.st_mode),
+                  "path": ".",
+                  "type": "directory",
+              }
+          ]
+          for directory, directory_names, file_names in os.walk(root, followlinks=False):
+              base = Path(directory)
+              for name in sorted(directory_names + file_names):
+                  path = base / name
+                  if path == manifest:
+                      continue
+                  relative = path.relative_to(root).as_posix()
+                  metadata = path.lstat()
+                  mode = stat.S_IMODE(metadata.st_mode)
+                  if stat.S_ISDIR(metadata.st_mode):
+                      entries.append({"mode": mode, "path": relative, "type": "directory"})
+                  elif stat.S_ISREG(metadata.st_mode):
+                      entries.append(
+                          {
+                              "mode": mode,
+                              "path": relative,
+                              "sha256": digest(path),
+                              "size": metadata.st_size,
+                              "type": "file",
+                          }
+                      )
+                  else:
+                      raise SystemExit(f"protected tree contains a special path: {relative}")
+          entries.sort(key=lambda item: (item["path"], item["type"]))
+          payload = {"entries": entries, "schema": "axiom-verification-tree/v1"}
+          encoded = (
+              json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+          ).encode()
+          manifest.write_bytes(encoded)
+          manifest.chmod(0o644)
+          PY
+          sudo chown root:root \
+            /opt/axiom-verification/.axiom-verification-manifest.json
+          manifest_sha256="$(sudo sha256sum \
+            /opt/axiom-verification/.axiom-verification-manifest.json | cut -d ' ' -f 1)"
+          echo "manifest-sha256=$manifest_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Exercise protected supervisor before caching
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/axiom-verification/axiom-encode-signing-supervisor \
+            --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
+            --trusted-python-runtime-root /opt/axiom-verification/python \
+            --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
+            --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
+            -- /opt/axiom-verification/axiom-encode --help >/dev/null
+          /opt/axiom-verification/axiom-rules-engine --help >/dev/null
+
+      - name: Compute same-run protected-tree cache key
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        id: cache_key
+        shell: bash
+        env:
+          AXIOM_ENCODE_SHA: ${{ inputs.axiom-encode-ref }}
+          AXIOM_RULES_ENGINE_SHA: ${{ inputs.axiom-rules-engine-ref }}
+          MANIFEST_SHA256: ${{ steps.provision_tree.outputs.manifest-sha256 }}
+          RESOLVED_PYTHON_VERSION: ${{ steps.python.outputs.python-version }}
+          # Round-trip through JSON for actionlint releases whose static job
+          # schema predates GitHub's reusable-workflow identity properties.
+          WORKFLOW_HASH: ${{ fromJSON(toJSON(job)).workflow_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RESOLVED_PYTHON_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.+-][A-Za-z0-9.-]+)?$ ]]; then
+            echo "setup-python returned an unsafe version: $RESOLVED_PYTHON_VERSION" >&2
+            exit 1
+          fi
+          if [[ ! "$WORKFLOW_HASH" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Reusable workflow identity is not an exact commit hash: $WORKFLOW_HASH" >&2
+            exit 1
+          fi
+          if [[ ! "$MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Fresh provision did not emit a valid manifest digest" >&2
+            exit 1
+          fi
+          if [[ ! "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]] \
+            || [[ ! "$GITHUB_RUN_ATTEMPT" =~ ^[0-9]+$ ]]; then
+            echo "GitHub run identity is not numeric" >&2
+            exit 1
+          fi
+          nonce="$(openssl rand -hex 16)"
+          if [[ ! "$nonce" =~ ^[0-9a-f]{32}$ ]]; then
+            echo "Could not create a safe cache-generation nonce" >&2
+            exit 1
+          fi
+          # job.workflow_sha identifies this reusable workflow rather than the
+          # caller checkout. The random generation and manifest suffix make
+          # this an exact same-run handoff, not an unsigned cross-run authority.
+          key="axiom-verification-${RUNNER_OS}-${RUNNER_ARCH}-${AXIOM_ENCODE_SHA}-${AXIOM_RULES_ENGINE_SHA}-${RESOLVED_PYTHON_VERSION}-${WORKFLOW_HASH}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${nonce}-${MANIFEST_SHA256}"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      # The cache never grants signing or execution authority: this job freshly
+      # builds from authenticated dependency commits, and its out-of-cache job
+      # output is the digest authority for every matrix leg. The unpredictable
+      # same-run key prevents a competing job from pre-populating the entry.
+      - name: Save protected verification tree cache
+        id: save_cache
+        if: ${{ steps.policy.outputs.eligible == 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /opt/axiom-verification
+          key: ${{ steps.cache_key.outputs.key }}
+
+      - name: Publish protected cache result
+        id: result
+        if: ${{ always() }}
+        shell: bash
+        env:
+          FRESH_MANIFEST_SHA256: ${{ steps.provision_tree.outputs.manifest-sha256 }}
+          PRIMARY_CACHE_KEY: ${{ steps.cache_key.outputs.key }}
+          PYTHON_VERSION: ${{ steps.python.outputs.python-version }}
+          SAVE_OUTCOME: ${{ steps.save_cache.outcome }}
+        run: |
+          set -euo pipefail
+          cache_ready=false
+          cache_key=""
+          manifest_sha256=""
+          python_version=""
+          if [[ "$PRIMARY_CACHE_KEY" =~ ^axiom-verification-[A-Za-z0-9._-]+$ ]] \
+            && [[ "$FRESH_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]] \
+            && [ "$SAVE_OUTCOME" = "success" ]; then
+            cache_ready=true
+            cache_key="$PRIMARY_CACHE_KEY"
+            manifest_sha256="$FRESH_MANIFEST_SHA256"
+            python_version="$PYTHON_VERSION"
+          else
+            echo "Same-run cache unavailable; validation legs will provision fresh." >&2
+          fi
+          {
+            echo "cache-ready=$cache_ready"
+            echo "cache-key=$cache_key"
+            echo "manifest-sha256=$manifest_sha256"
+            echo "python-version=$python_version"
+          } >> "$GITHUB_OUTPUT"
+
   validate:
     # Keep the check name exactly `validate` across matrix legs so existing
     # required-status configs keep matching. A root at or below the cap keeps
     # its single leg; only oversized roots gain deterministic sub-shards.
     name: validate
-    needs: shards
+    needs: [shards, provision]
+    # A failed optional cache fanout must not suppress validation. Only shard
+    # discovery is gating; empty provision outputs select the original path.
+    if: ${{ always() && needs.shards.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -465,6 +810,227 @@ jobs:
           sudo docker image prune --all --force >/dev/null 2>&1 || true
           echo "Disk after cleanup:" && df -h /
 
+      - name: Set up Python
+        id: python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Prepare protected-tree cache restore
+        id: prepare_cache
+        if: ${{ needs.provision.outputs.cache-ready == 'true' }}
+        shell: bash
+        env:
+          EXPECTED_CACHE_KEY: ${{ needs.provision.outputs.cache-key }}
+          EXPECTED_MANIFEST_SHA256: ${{ needs.provision.outputs.manifest-sha256 }}
+          EXPECTED_PYTHON_VERSION: ${{ needs.provision.outputs.python-version }}
+          RESOLVED_PYTHON_VERSION: ${{ steps.python.outputs.python-version }}
+          TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
+          TRUST_EVAL_ROOT: ${{ vars.AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY }}
+          TRUST_CORPUS_RELEASE_ROOT: ${{ vars.AXIOM_CORPUS_RELEASE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          cache_ready=true
+          if [[ ! "$EXPECTED_CACHE_KEY" =~ ^axiom-verification-[A-Za-z0-9._-]+$ ]]; then
+            echo "Provision job did not emit a safe cache key" >&2
+            cache_ready=false
+          fi
+          if [[ ! "$EXPECTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Provision job did not emit a valid manifest digest" >&2
+            cache_ready=false
+          fi
+          case "$EXPECTED_CACHE_KEY" in
+            *-"$EXPECTED_MANIFEST_SHA256") : ;;
+            *)
+              echo "Cache key is not bound to the expected manifest digest" >&2
+              cache_ready=false
+              ;;
+          esac
+          if [ "$RESOLVED_PYTHON_VERSION" != "$EXPECTED_PYTHON_VERSION" ]; then
+            echo "setup-python resolved inconsistently across jobs: $RESOLVED_PYTHON_VERSION != $EXPECTED_PYTHON_VERSION" >&2
+            cache_ready=false
+          fi
+          if [ -z "$TRUST_APPLY_ROOT" ] || [ -z "$TRUST_EVAL_ROOT" ] \
+            || [ -z "$TRUST_CORPUS_RELEASE_ROOT" ]; then
+            echo "Current signing trust roots are unavailable" >&2
+            cache_ready=false
+          fi
+          if [ "$cache_ready" = "true" ]; then
+            if sudo rm -rf /opt/axiom-verification \
+              && sudo install -d -o "$(id -u)" -g "$(id -g)" -m 0755 \
+                /opt/axiom-verification; then
+              :
+            else
+              echo "Could not prepare cache destination; provisioning fresh." >&2
+              cache_ready=false
+            fi
+          fi
+          echo "ready=$cache_ready" >> "$GITHUB_OUTPUT"
+
+      - name: Restore protected verification tree cache
+        id: verification_cache
+        if: ${{ steps.prepare_cache.outputs.ready == 'true' }}
+        continue-on-error: true
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /opt/axiom-verification
+          key: ${{ needs.provision.outputs.cache-key }}
+
+      - name: Verify restored protected tree before use
+        id: verify_cache
+        if: ${{ steps.prepare_cache.outputs.ready == 'true' }}
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.verification_cache.outputs.cache-hit }}
+          EXPECTED_MANIFEST_SHA256: ${{ needs.provision.outputs.manifest-sha256 }}
+          TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
+          TRUST_EVAL_ROOT: ${{ vars.AXIOM_ENCODE_EVAL_SIGNING_PUBLIC_KEY }}
+          TRUST_CORPUS_RELEASE_ROOT: ${{ vars.AXIOM_CORPUS_RELEASE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          cache_valid=false
+          if [ "$CACHE_HIT" = "true" ] && python -I - <<'PY'
+          import hashlib
+          import hmac
+          import json
+          import os
+          import stat
+          from pathlib import Path
+
+          root = Path("/opt/axiom-verification")
+          manifest = root / ".axiom-verification-manifest.json"
+
+          def fail(message: str) -> None:
+              raise SystemExit(f"Protected cache rejected: {message}")
+
+          def digest(path: Path) -> str:
+              value = hashlib.sha256()
+              with path.open("rb") as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                      value.update(chunk)
+              return value.hexdigest()
+
+          root_stat = root.lstat()
+          if not stat.S_ISDIR(root_stat.st_mode) or root.is_symlink():
+              fail("root is not a real directory")
+          if manifest.is_symlink() or not manifest.is_file():
+              fail("recorded manifest is not a regular file")
+          manifest_stat = manifest.stat()
+          if stat.S_IMODE(manifest_stat.st_mode) != 0o644:
+              fail("recorded manifest mode is not 0644")
+          if manifest_stat.st_size > 32 * 1024 * 1024:
+              fail("recorded manifest is unreasonably large")
+
+          entries = [
+              {
+                  "mode": stat.S_IMODE(root_stat.st_mode),
+                  "path": ".",
+                  "type": "directory",
+              }
+          ]
+          for directory, directory_names, file_names in os.walk(root, followlinks=False):
+              base = Path(directory)
+              for name in sorted(directory_names + file_names):
+                  path = base / name
+                  if path == manifest:
+                      continue
+                  relative = path.relative_to(root).as_posix()
+                  metadata = path.lstat()
+                  mode = stat.S_IMODE(metadata.st_mode)
+                  if stat.S_ISDIR(metadata.st_mode):
+                      entries.append({"mode": mode, "path": relative, "type": "directory"})
+                  elif stat.S_ISREG(metadata.st_mode):
+                      entries.append(
+                          {
+                              "mode": mode,
+                              "path": relative,
+                              "sha256": digest(path),
+                              "size": metadata.st_size,
+                              "type": "file",
+                          }
+                      )
+                  else:
+                      fail(f"special or symbolic path found: {relative}")
+          entries.sort(key=lambda item: (item["path"], item["type"]))
+          actual_manifest = (
+              json.dumps(
+                  {"entries": entries, "schema": "axiom-verification-tree/v1"},
+                  sort_keys=True,
+                  separators=(",", ":"),
+              )
+              + "\n"
+          ).encode()
+          recorded_manifest = manifest.read_bytes()
+          if not hmac.compare_digest(recorded_manifest, actual_manifest):
+              fail("recorded manifest does not match the complete restored tree")
+          actual_manifest_sha256 = hashlib.sha256(recorded_manifest).hexdigest()
+          expected_manifest_sha256 = os.environ["EXPECTED_MANIFEST_SHA256"]
+          if not hmac.compare_digest(actual_manifest_sha256, expected_manifest_sha256):
+              fail("manifest digest does not match the cache authority job")
+
+          expected_trust_roots = (
+              json.dumps(
+                  {
+                      "apply_ed25519_public_key": os.environ["TRUST_APPLY_ROOT"],
+                      "corpus_release_ed25519_public_key": os.environ[
+                          "TRUST_CORPUS_RELEASE_ROOT"
+                      ],
+                      "eval_ed25519_public_key": os.environ["TRUST_EVAL_ROOT"],
+                      "schema": "axiom-encode/signing-trust-roots/v2",
+                  },
+                  sort_keys=True,
+              )
+              + "\n"
+          ).encode()
+          trust_roots = root / "signing-trust-roots.json"
+          if trust_roots.is_symlink() or not trust_roots.is_file():
+              fail("signing trust roots are not a regular file")
+          if not hmac.compare_digest(trust_roots.read_bytes(), expected_trust_roots):
+              fail("cached signing trust roots differ from current organization roots")
+          print(
+              "Restored tree matches the cache authority's manifest and "
+              "current signing trust roots."
+          )
+          PY
+          then
+            cache_valid=true
+          else
+            echo "Cache unavailable or untrusted; falling back to fresh provisioning."
+            sudo rm -rf /opt/axiom-verification || true
+          fi
+
+          if [ "$cache_valid" = "true" ]; then
+            # This is deliberately before the caller checkout: no repository
+            # module can shadow the isolated verifier or race the hardening.
+            if sudo chown -R root:root /opt/axiom-verification \
+              && sudo chmod -R u+rwX,go+rX,go-w /opt/axiom-verification \
+              && sudo chown root:root /opt \
+              && sudo chmod go-w /opt; then
+              # Exercise both cached executables only after the complete tree
+              # is bound to the fresh job-output digest and made non-writable.
+              # The supervisor re-checks the trusted roots on this and every
+              # later invocation. ABI/runtime mismatch means cache miss.
+              if /opt/axiom-verification/axiom-encode-signing-supervisor \
+                --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
+                --trusted-python-runtime-root /opt/axiom-verification/python \
+                --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
+                --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
+                -- /opt/axiom-verification/axiom-encode --help >/dev/null \
+                && /opt/axiom-verification/axiom-rules-engine --help >/dev/null; then
+                echo "Restored protected tree passed executable smoke tests."
+              else
+                cache_valid=false
+                echo "Cached executable smoke test failed; provisioning fresh."
+                sudo rm -rf /opt/axiom-verification || true
+              fi
+            else
+              cache_valid=false
+              echo "Could not harden cached tree; provisioning fresh."
+              sudo rm -rf /opt/axiom-verification || true
+            fi
+          fi
+          echo "valid=$cache_valid" >> "$GITHUB_OUTPUT"
+
       - name: Checkout rules repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -478,7 +1044,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
-          python3 <<'PY'
+          python3 -I - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -497,11 +1063,6 @@ jobs:
           print("Shard filters: " + ", ".join(descriptor["filters"]))
           PY
 
-      - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
-        with:
-          python-version: ${{ inputs.python-version }}
-
       - name: Resolve RuleSpec toolchain
         id: toolchain
         shell: bash
@@ -509,7 +1070,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
         run: |
           set -euo pipefail
-          python - <<'PY'
+          python -I - <<'PY'
           import os
           import re
           import subprocess
@@ -723,14 +1284,20 @@ jobs:
           cache: false
 
       - name: Install Python dependencies
+        shell: bash
+        env:
+          CACHE_VALID: ${{ steps.verify_cache.outputs.valid }}
         run: |
+          set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install pytest pyyaml
           python -m pip install -e _axiom/axiom-encode
-          rm -rf "$RUNNER_TEMP/axiom-verification-site-packages"
-          python -m pip install \
-            --target "$RUNNER_TEMP/axiom-verification-site-packages" \
-            ./_axiom/axiom-encode
+          if [ "$CACHE_VALID" != "true" ]; then
+            rm -rf "$RUNNER_TEMP/axiom-verification-site-packages"
+            python -m pip install \
+              --target "$RUNNER_TEMP/axiom-verification-site-packages" \
+              ./_axiom/axiom-encode
+          fi
 
       - name: Fetch pinned signed corpus release object
         shell: bash
@@ -836,6 +1403,7 @@ jobs:
             }
 
       - name: Provision protected verification supervisor
+        if: ${{ steps.verify_cache.outputs.valid != 'true' }}
         working-directory: _axiom/axiom-encode
         env:
           TRUST_APPLY_ROOT: ${{ vars.AXIOM_ENCODE_APPLY_SIGNING_PUBLIC_KEY }}
@@ -881,8 +1449,21 @@ jobs:
           sudo chmod go-w /opt
 
       - name: Build axiom-rules-engine
+        if: ${{ steps.verify_cache.outputs.valid != 'true' }}
         working-directory: _axiom/axiom-rules-engine
         run: cargo build --verbose
+
+      - name: Materialize protected axiom-rules-engine
+        shell: bash
+        env:
+          CACHE_VALID: ${{ steps.verify_cache.outputs.valid }}
+        run: |
+          set -euo pipefail
+          checkout_binary="$GITHUB_WORKSPACE/_axiom/axiom-rules-engine/target/debug/axiom-rules-engine"
+          protected_binary="/opt/axiom-verification/axiom-rules-engine"
+          if [ "$CACHE_VALID" = "true" ]; then
+            install -D -m 0755 "$protected_binary" "$checkout_binary"
+          fi
 
       - name: Expose axiom-rules-engine on PATH
         run: echo "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine/target/debug" >> "$GITHUB_PATH"
@@ -1202,7 +1783,7 @@ jobs:
           : > "$test_file_list"
 
           shard_filter_file="$RUNNER_TEMP/shard-filters.txt"
-          python3 - <<'PY' > "$shard_filter_file"
+          python3 -I - <<'PY' > "$shard_filter_file"
           import json
           import os
 
@@ -1777,7 +2358,7 @@ jobs:
           MAX_SHARD_MODULES: ${{ needs.shards.outputs.max-shard-modules }}
         run: |
           set -euo pipefail
-          python3 <<'PY'
+          python3 -I - <<'PY'
           import json
           import os
           from collections import defaultdict
