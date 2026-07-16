@@ -1240,8 +1240,7 @@ jobs:
           : > "$skip_list"
           : > "$waiver_skip_list"
           : > "$target_pass_skip_list"
-          if [ -f known-validation-gaps.yaml ]; then
-            python - <<'SKIP' > "$waiver_skip_list"
+          python - <<'SKIP' > "$waiver_skip_list"
           import base64
           import hashlib
           import io
@@ -1259,7 +1258,12 @@ jobs:
 
           import yaml
 
-          payload = yaml.safe_load(open("known-validation-gaps.yaml")) or {}
+          waiver_path = Path("known-validation-gaps.yaml")
+          payload = (
+              yaml.safe_load(waiver_path.read_text(encoding="utf-8")) or {}
+              if waiver_path.is_file()
+              else {}
+          )
           failures = payload.get("validate_failures") or {}
           base_ref = os.environ.get("PR_BASE_SHA", "").strip()
           if not base_ref:
@@ -1774,7 +1778,8 @@ jobs:
                       "target-pass workflow artifact module inventory mismatch"
               )
 
-              for path, entry in sorted(evidence["modules"].items()):
+              for path in sorted(relevant_paths):
+                  entry = evidence["modules"][path]
                   if not Path(path).exists() and path in changed_paths:
                       print(
                           f"TARGET PASS NOT SKIPPED (module deleted): {path}",
@@ -1953,9 +1958,8 @@ jobs:
                       print(path)
           print_protected_target_passes()
           SKIP
-            cat "$waiver_skip_list" "$target_pass_skip_list" \
-              | sort -u > "$skip_list"
-          fi
+          cat "$waiver_skip_list" "$target_pass_skip_list" \
+            | sort -u > "$skip_list"
 
           if [ "${#rulespec_files[@]}" -eq 0 ]; then
             echo "No RuleSpec YAML files selected for validation."
