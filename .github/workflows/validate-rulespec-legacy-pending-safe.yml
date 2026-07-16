@@ -1772,9 +1772,15 @@ jobs:
               ):
                   raise SystemExit(
                       "target-pass workflow artifact module inventory mismatch"
-                  )
+              )
 
               for path, entry in sorted(evidence["modules"].items()):
+                  if not Path(path).exists() and path in changed_paths:
+                      print(
+                          f"TARGET PASS NOT SKIPPED (module deleted): {path}",
+                          file=sys.stderr,
+                      )
+                      continue
                   require_regular_module(path)
                   if path in failures:
                       raise SystemExit(
@@ -1788,9 +1794,6 @@ jobs:
                       raise SystemExit(
                           f"target-pass evidence has invalid module record: {path}"
                       )
-                  module_digest = "sha256:" + hashlib.sha256(
-                      Path(path).read_bytes()
-                  ).hexdigest()
                   run_module_digest = "sha256:" + hashlib.sha256(
                       protected_run_file(path, label=f"module source {path}")
                   ).hexdigest()
@@ -1798,7 +1801,6 @@ jobs:
                       entry.get("passed") is not True
                       or not isinstance(entry.get("fingerprint"), str)
                       or fingerprint_re.fullmatch(entry["fingerprint"]) is None
-                      or entry.get("module_sha256") != module_digest
                       or entry.get("module_sha256") != run_module_digest
                   ):
                       raise SystemExit(
@@ -1812,6 +1814,16 @@ jobs:
                       raise SystemExit(
                           f"target-pass workflow artifact mismatch: {path}"
                       )
+
+                  module_digest = "sha256:" + hashlib.sha256(
+                      Path(path).read_bytes()
+                  ).hexdigest()
+                  if entry.get("module_sha256") != module_digest:
+                      print(
+                          f"TARGET PASS NOT SKIPPED (module changed): {path}",
+                          file=sys.stderr,
+                      )
+                      continue
 
                   companion = (
                       source_entry.get("outcome", {}).get("companion")
@@ -1837,10 +1849,12 @@ jobs:
                           )
                       try:
                           current_companion = Path(companion_path).read_bytes()
-                      except OSError as error:
-                          raise SystemExit(
-                              f"target-pass companion is unavailable: {path}"
-                          ) from error
+                      except OSError:
+                          print(
+                              f"TARGET PASS NOT SKIPPED (companion deleted): {path}",
+                              file=sys.stderr,
+                          )
+                          continue
                       run_companion = protected_run_file(
                           companion_path,
                           label=f"companion source {companion_path}",
@@ -1848,13 +1862,17 @@ jobs:
                       if hashlib.sha256(current_companion).digest() != hashlib.sha256(
                           run_companion
                       ).digest():
-                          raise SystemExit(
-                              f"target-pass companion changed since evidence run: {path}"
+                          print(
+                              f"TARGET PASS NOT SKIPPED (companion changed): {path}",
+                              file=sys.stderr,
                           )
+                          continue
                   elif Path(companion_path).exists():
-                      raise SystemExit(
-                          f"target-pass companion was added after evidence run: {path}"
+                      print(
+                          f"TARGET PASS NOT SKIPPED (companion added): {path}",
+                          file=sys.stderr,
                       )
+                      continue
                   if path in relevant_paths and waiver_module_is_unchanged(path):
                       with (
                           Path(os.environ["RUNNER_TEMP"])
