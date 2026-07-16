@@ -1803,6 +1803,28 @@ jobs:
                   raise SystemExit(
                       "target-pass workflow source is not the reviewed harness"
                   )
+              try:
+                  workflow_text = workflow_bytes.decode("utf-8")
+              except UnicodeDecodeError as error:
+                  raise SystemExit(
+                      "target-pass workflow source is not valid UTF-8"
+                  ) from error
+              executed_checkout_refs = {
+                  "axiom_encode_ref": "axiom-encode",
+                  "axiom_rules_engine_ref": "axiom-rules-engine",
+                  "axiom_corpus_ref": "axiom-corpus",
+              }
+              for toolchain_key, repository in executed_checkout_refs.items():
+                  refs = re.findall(
+                      rf"(?m)^\s*repository:\s*TheAxiomFoundation/{repository}\s*$"
+                      rf"\n\s*ref:\s*([0-9a-f]{{40}})\s*$",
+                      workflow_text,
+                  )
+                  if refs != [expected_target_toolchain[toolchain_key]]:
+                      raise SystemExit(
+                          "target-pass workflow checkout does not match the reviewed "
+                          f"{toolchain_key}"
+                      )
 
               artifacts_result = subprocess.run(
                   [
@@ -1907,9 +1929,9 @@ jobs:
 
               for path in sorted(relevant_paths):
                   entry = evidence["modules"][path]
-                  if not Path(path).exists() and path in changed_paths:
+                  if not Path(path).exists():
                       print(
-                          f"TARGET PASS NOT SKIPPED (module deleted): {path}",
+                          f"TARGET PASS NOT SKIPPED (module absent): {path}",
                           file=sys.stderr,
                       )
                       continue
