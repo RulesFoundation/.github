@@ -1235,9 +1235,13 @@ jobs:
           # records and exact evidence-backed pending records skip unchanged
           # modules. Pending never becomes active in this bridge.
           skip_list="$RUNNER_TEMP/validate-skip.txt"
+          waiver_skip_list="$RUNNER_TEMP/waiver-validation-skip.txt"
+          target_pass_skip_list="$RUNNER_TEMP/target-pass-validation-skip.txt"
           : > "$skip_list"
+          : > "$waiver_skip_list"
+          : > "$target_pass_skip_list"
           if [ -f known-validation-gaps.yaml ]; then
-            python - <<'SKIP' > "$skip_list"
+            python - <<'SKIP' > "$waiver_skip_list"
           import base64
           import hashlib
           import io
@@ -1808,8 +1812,55 @@ jobs:
                       raise SystemExit(
                           f"target-pass workflow artifact mismatch: {path}"
                       )
+
+                  companion = (
+                      source_entry.get("outcome", {}).get("companion")
+                      if isinstance(source_entry.get("outcome"), dict)
+                      else None
+                  )
+                  companion_path = (
+                      f"{path[:-5]}.test.yaml"
+                      if path.endswith(".yaml")
+                      else f"{path[:-4]}.test.yml"
+                  )
+                  if (
+                      not isinstance(companion, dict)
+                      or not isinstance(companion.get("present"), bool)
+                  ):
+                      raise SystemExit(
+                          f"target-pass companion evidence is invalid: {path}"
+                      )
+                  if companion["present"]:
+                      if companion.get("path") != companion_path:
+                          raise SystemExit(
+                              f"target-pass companion path mismatch: {path}"
+                          )
+                      try:
+                          current_companion = Path(companion_path).read_bytes()
+                      except OSError as error:
+                          raise SystemExit(
+                              f"target-pass companion is unavailable: {path}"
+                          ) from error
+                      run_companion = protected_run_file(
+                          companion_path,
+                          label=f"companion source {companion_path}",
+                      )
+                      if hashlib.sha256(current_companion).digest() != hashlib.sha256(
+                          run_companion
+                      ).digest():
+                          raise SystemExit(
+                              f"target-pass companion changed since evidence run: {path}"
+                          )
+                  elif Path(companion_path).exists():
+                      raise SystemExit(
+                          f"target-pass companion was added after evidence run: {path}"
+                      )
                   if path in relevant_paths and waiver_module_is_unchanged(path):
-                      print(path)
+                      with (
+                          Path(os.environ["RUNNER_TEMP"])
+                          / "target-pass-validation-skip.txt"
+                      ).open("a", encoding="utf-8") as target_skip:
+                          print(path, file=target_skip)
 
           def waiver_module_is_unchanged(path):
               unchanged = path not in changed_paths
@@ -1884,6 +1935,8 @@ jobs:
                       print(path)
           print_protected_target_passes()
           SKIP
+            cat "$waiver_skip_list" "$target_pass_skip_list" \
+              | sort -u > "$skip_list"
           fi
 
           if [ "${#rulespec_files[@]}" -eq 0 ]; then
@@ -1894,7 +1947,11 @@ jobs:
           selected=()
           for file in "${rulespec_files[@]}"; do
             if grep -qxF "$file" "$skip_list"; then
-              echo "SKIPPED (known-validation-gaps validate_failures): $file"
+              if grep -qxF "$file" "$target_pass_skip_list"; then
+                echo "SKIPPED (protected target-toolchain pass evidence): $file"
+              else
+                echo "SKIPPED (known-validation-gaps validate_failures): $file"
+              fi
               continue
             fi
             selected+=("$GITHUB_WORKSPACE/$file")
@@ -1921,9 +1978,10 @@ jobs:
           mapfile -t test_files < "$RULESPEC_TEST_FILE_LIST"
 
           # A module ratcheted under validate_failures cannot be expected to
-          # execute either; skip its companion test loudly (same
-          # known-validation-gaps.yaml list the validate step consults).
+          # execute either. Protected target-pass evidence may also skip only
+          # the exact companion bytes attested by its source workflow run.
           skip_list="$RUNNER_TEMP/validate-skip.txt"
+          target_pass_skip_list="$RUNNER_TEMP/target-pass-validation-skip.txt"
           selected=()
           for test_file in "${test_files[@]}"; do
             case "$test_file" in
@@ -1932,7 +1990,11 @@ jobs:
               *) module_file="$test_file" ;;
             esac
             if [ -s "$skip_list" ] && grep -qxF "$module_file" "$skip_list"; then
-              echo "SKIPPED companion (known-validation-gaps validate_failures): $test_file"
+              if grep -qxF "$module_file" "$target_pass_skip_list"; then
+                echo "SKIPPED companion (protected target-toolchain pass evidence): $test_file"
+              else
+                echo "SKIPPED companion (known-validation-gaps validate_failures): $test_file"
+              fi
               continue
             fi
             selected+=("$test_file")
@@ -1964,8 +2026,9 @@ jobs:
             exit 0
           fi
 
-          # Reuse the evidence-checked skip list built by the validation step.
-          skip_list="$RUNNER_TEMP/validate-skip.txt"
+          # Target-pass evidence covers validation and companion execution only;
+          # proof validation may skip only actual waiver records.
+          skip_list="$RUNNER_TEMP/waiver-validation-skip.txt"
           prefixed=()
           for file in "${rulespec_files[@]}"; do
             if [ -s "$skip_list" ] && grep -qxF "$file" "$skip_list"; then
