@@ -1250,6 +1250,7 @@ jobs:
           import stat
           import subprocess
           import sys
+          import tomllib
           import unicodedata
           import zipfile
           from datetime import date, timedelta
@@ -1566,6 +1567,20 @@ jobs:
               if not relevant_paths:
                   return
 
+              expected_target_toolchain = {
+                  "axiom_encode_ref": "ffb0e7ccde22f6e136dc52aecaf4b5ed3ea6c6b7",
+                  "axiom_rules_engine_ref": "48797e101c093bb388be718c6f5d8fc9d9f94a7d",
+                  "axiom_corpus_ref": "6b27ed6a7b419876468c105509262b989a64965f",
+                  "rulespec_us_ref": "265da6828fd6b040bac71bbd02f462c1bfddcef1",
+                  "axiom_corpus_release": "us-rulespec-foundation-v5-2026-07-15",
+                  "axiom_corpus_release_content_sha256": (
+                      "e34c830c865d77851376d9bcf3095bb928ce3040433ebe7f24492c20eb36b873"
+                  ),
+              }
+              if evidence.get("toolchain") != expected_target_toolchain:
+                  raise SystemExit(
+                      "target-pass evidence does not match the reviewed target toolchain"
+                  )
               pending_evidence = pending_evidence_payload()
               if evidence.get("toolchain") != pending_evidence.get("toolchain"):
                   raise SystemExit(
@@ -1614,6 +1629,11 @@ jobs:
                   raise SystemExit(
                       "target-pass workflow run response is invalid JSON"
                   ) from error
+              pull_requests = (
+                  remote_run.get("pull_requests")
+                  if isinstance(remote_run, dict)
+                  else None
+              )
               if (
                   not isinstance(remote_run, dict)
                   or remote_run.get("head_sha") != run["head_sha"]
@@ -1622,16 +1642,74 @@ jobs:
                   or remote_run.get("event") != "pull_request"
                   or remote_run.get("path")
                   != ".github/workflows/waiver-fingerprint-scratch.yml"
+                  or not isinstance(pull_requests, list)
+                  or len(pull_requests) != 1
+                  or not isinstance(pull_requests[0], dict)
               ):
                   raise SystemExit("target-pass workflow run does not match evidence")
 
-              def protected_run_file(path, *, label):
+              run_pull_request = pull_requests[0]
+              run_base = run_pull_request.get("base")
+              run_head = run_pull_request.get("head")
+              if (
+                  not isinstance(run_base, dict)
+                  or not isinstance(run_head, dict)
+                  or not isinstance(run_base.get("sha"), str)
+                  or re.fullmatch(r"[0-9a-f]{40}", run_base["sha"]) is None
+                  or run_head.get("sha") != run["head_sha"]
+              ):
+                  raise SystemExit(
+                      "target-pass workflow pull request does not match evidence"
+                  )
+
+              # The protected job log records the exact synthetic merge commit
+              # checked out by this run. GitHub's run-level head_sha is only the
+              # PR branch head, so it is not the executed source revision.
+              execution_sha = "1f98c0616ffe467cc089341f910e433422a21c6a"
+              execution_result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "repos/TheAxiomFoundation/rulespec-us/git/commits/"
+                      f"{execution_sha}",
+                  ],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if execution_result.returncode != 0:
+                  raise SystemExit("cannot verify target-pass execution commit")
+              try:
+                  execution_commit = json.loads(execution_result.stdout)
+              except json.JSONDecodeError as error:
+                  raise SystemExit(
+                      "target-pass execution commit response is invalid JSON"
+                  ) from error
+              execution_parents = (
+                  execution_commit.get("parents")
+                  if isinstance(execution_commit, dict)
+                  else None
+              )
+              if (
+                  not isinstance(execution_commit, dict)
+                  or execution_commit.get("sha") != execution_sha
+                  or not isinstance(execution_parents, list)
+                  or not all(isinstance(parent, dict) for parent in execution_parents)
+                  or [parent.get("sha") for parent in execution_parents]
+                  != [run_base["sha"], run["head_sha"]]
+              ):
+                  raise SystemExit(
+                      "target-pass execution commit does not match the workflow run"
+                  )
+
+              def protected_run_file(path, *, ref, label):
                   result = subprocess.run(
                       [
                           "gh",
                           "api",
                           "repos/TheAxiomFoundation/rulespec-us/contents/"
-                          f"{quote(path, safe='/')}?ref={run['head_sha']}",
+                          f"{quote(path, safe='/')}?ref={ref}",
                       ],
                       check=False,
                       stdout=subprocess.PIPE,
@@ -1657,8 +1735,57 @@ jobs:
                           f"target-pass {label} response is invalid"
                       ) from error
 
+              base_toolchain_result = subprocess.run(
+                  ["git", "show", f"{base_ref}:.axiom/toolchain.toml"],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+              )
+              if base_toolchain_result.returncode != 0:
+                  raise SystemExit(
+                      "protected base lacks the legacy toolchain from the evidence run"
+                  )
+              run_base_toolchain = protected_run_file(
+                  ".axiom/toolchain.toml",
+                  ref=run_base["sha"],
+                  label="protected-base toolchain source",
+              )
+              if base_toolchain_result.stdout != run_base_toolchain:
+                  raise SystemExit(
+                      "protected-base toolchain drifted since target-pass evidence"
+                  )
+
+              execution_toolchain_bytes = protected_run_file(
+                  ".axiom/toolchain.toml",
+                  ref=execution_sha,
+                  label="execution toolchain source",
+              )
+              try:
+                  execution_toolchain = tomllib.loads(
+                      execution_toolchain_bytes.decode("utf-8")
+                  ).get("toolchain")
+              except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+                  raise SystemExit(
+                      "target-pass execution toolchain is invalid"
+                  ) from error
+              if (
+                  not isinstance(execution_toolchain, dict)
+                  or execution_toolchain.get("axiom_corpus_release")
+                  != expected_target_toolchain["axiom_corpus_release"]
+                  or execution_toolchain.get(
+                      "axiom_corpus_release_content_sha256"
+                  )
+                  != expected_target_toolchain[
+                      "axiom_corpus_release_content_sha256"
+                  ]
+              ):
+                  raise SystemExit(
+                      "target-pass execution did not use the reviewed target corpus"
+                  )
+
               workflow_bytes = protected_run_file(
                   ".github/workflows/waiver-fingerprint-scratch.yml",
+                  ref=execution_sha,
                   label="workflow source",
               )
               # This digest is the independently reviewed, protected v5
@@ -1800,7 +1927,11 @@ jobs:
                           f"target-pass evidence has invalid module record: {path}"
                       )
                   run_module_digest = "sha256:" + hashlib.sha256(
-                      protected_run_file(path, label=f"module source {path}")
+                      protected_run_file(
+                          path,
+                          ref=execution_sha,
+                          label=f"module source {path}",
+                      )
                   ).hexdigest()
                   if (
                       entry.get("passed") is not True
@@ -1862,6 +1993,7 @@ jobs:
                           continue
                       run_companion = protected_run_file(
                           companion_path,
+                          ref=execution_sha,
                           label=f"companion source {companion_path}",
                       )
                       if hashlib.sha256(current_companion).digest() != hashlib.sha256(
