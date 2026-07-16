@@ -1112,7 +1112,8 @@ jobs:
           new_line = after[changed[0]].rstrip("\r\n")
           old = re.fullmatch(
               r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
-              r"workflows/validate-rulespec\.yml@[0-9a-f]{40}(?:\s+#.*)?",
+              r"workflows/(?P<workflow>validate-rulespec(?:-legacy-pending-safe)?)"
+              r"\.yml@[0-9a-f]{40}(?:\s+#.*)?",
               old_line,
           )
           new = re.fullmatch(
@@ -1123,7 +1124,10 @@ jobs:
           )
           if old is None or new is None or old["indent"] != new["indent"]:
               raise SystemExit(1)
-          print("Caller change is an isolated pinned compatibility-bridge transition.")
+          if old["workflow"] == "validate-rulespec":
+              print("Caller change is an isolated pinned compatibility-bridge transition.")
+          else:
+              print("Caller change is an isolated pinned compatibility-bridge refresh.")
           PY
           }
 
