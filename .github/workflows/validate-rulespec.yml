@@ -998,6 +998,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
+          VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
         run: |
           set -euo pipefail
 
@@ -1023,6 +1024,23 @@ jobs:
               # atomic validation by design.
               */programs/*|programs/*) return ;;
             esac
+            if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
+              local canonical=false
+              local root
+              for root in $VALIDATE_ROOTS; do
+                case "$path" in
+                  # Auto-discovered roots are jurisdiction directories. Atomic
+                  # modules must be direct children of one canonical content
+                  # root; legacy manual/ trees are source context only.
+                  "$root"/statutes/*|"$root"/regulations/*|\
+                  "$root"/policies/*|"$root"/legislation/*)
+                    canonical=true
+                    break
+                    ;;
+                esac
+              done
+              [ "$canonical" = true ] || return 0
+            fi
             case "$path" in
               *.test.yaml)
                 add_existing_file "$path" "$test_file_list"
@@ -1045,7 +1063,7 @@ jobs:
 
           add_all_rulespec_targets() {
             while IFS= read -r path; do
-              add_existing_file "$path" "$rulespec_file_list"
+              add_rulespec_target "$path"
             done < <(
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
@@ -1056,7 +1074,7 @@ jobs:
               done
             )
             while IFS= read -r path; do
-              add_existing_file "$path" "$test_file_list"
+              add_rulespec_target "$path"
             done < <(
               for root in $VALIDATE_ROOTS; do
                 if [ -d "$root" ]; then
@@ -1356,11 +1374,27 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ needs.shards.outputs.roots }}
+          VALIDATE_ROOTS_INPUT: ${{ inputs.validate-roots }}
         run: |
           set -euo pipefail
 
+          atomic_roots=()
+          if [ "$VALIDATE_ROOTS_INPUT" = "auto" ]; then
+            for root in $VALIDATE_ROOTS; do
+              for marker in statutes regulations policies legislation; do
+                if [ -d "$root/$marker" ]; then
+                  atomic_roots+=("$root/$marker")
+                fi
+              done
+            done
+          else
+            for root in $VALIDATE_ROOTS; do
+              atomic_roots+=("$root")
+            done
+          fi
+
           money_atom_files=()
-          for root in $VALIDATE_ROOTS; do
+          for root in "${atomic_roots[@]}"; do
             if [ -d "$root" ]; then
               while IFS= read -r path; do
                 money_atom_files+=("$path")
