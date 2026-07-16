@@ -1101,6 +1101,25 @@ jobs:
               raise SystemExit(1)
           before = result.stdout.splitlines(keepends=True)
           after = Path(path).read_text().splitlines(keepends=True)
+          permission_block = [
+              "permissions:\n",
+              "  actions: read\n",
+              "  contents: read\n",
+              "\n",
+          ]
+          permission_grant = False
+          block_starts = [
+              index
+              for index in range(len(after) - len(permission_block))
+              if after[index : index + len(permission_block)] == permission_block
+              and after[index + len(permission_block)].rstrip("\r\n") == "jobs:"
+          ]
+          if len(after) == len(before) + len(permission_block):
+              if len(block_starts) != 1:
+                  raise SystemExit(1)
+              start = block_starts[0]
+              after = after[:start] + after[start + len(permission_block) :]
+              permission_grant = True
           changed = [
               index
               for index, pair in enumerate(zip(before, after, strict=False))
@@ -1127,6 +1146,11 @@ jobs:
               raise SystemExit(1)
           if old["workflow"] == "validate-rulespec":
               print("Caller change is an isolated pinned compatibility-bridge transition.")
+          elif permission_grant:
+              print(
+                  "Caller change is an isolated pinned compatibility-bridge "
+                  "refresh with read-only evidence access."
+              )
           else:
               print("Caller change is an isolated pinned compatibility-bridge refresh.")
           PY
