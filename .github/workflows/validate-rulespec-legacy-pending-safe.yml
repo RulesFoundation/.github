@@ -87,6 +87,7 @@ on:
         default: true
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -1112,7 +1113,9 @@ jobs:
           new_line = after[changed[0]].rstrip("\r\n")
           old = re.fullmatch(
               r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
-              r"workflows/validate-rulespec\.yml@[0-9a-f]{40}(?:\s+#.*)?",
+              r"workflows/(?:validate-rulespec|"
+              r"validate-rulespec-legacy-pending-safe)\.yml@"
+              r"[0-9a-f]{40}(?:\s+#.*)?",
               old_line,
           )
           new = re.fullmatch(
@@ -1216,6 +1219,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
+          GH_TOKEN: ${{ github.token }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
           AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
           AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
@@ -1234,7 +1238,9 @@ jobs:
           : > "$skip_list"
           if [ -f known-validation-gaps.yaml ]; then
             python - <<'SKIP' > "$skip_list"
+          import base64
           import hashlib
+          import io
           import json
           import os
           import re
@@ -1242,8 +1248,10 @@ jobs:
           import subprocess
           import sys
           import unicodedata
+          import zipfile
           from datetime import date, timedelta
           from pathlib import Path, PurePosixPath
+          from urllib.parse import quote
 
           import yaml
 
@@ -1298,6 +1306,7 @@ jobs:
               base_payload = yaml.safe_load(result.stdout) or {}
           base_failures = base_payload.get("validate_failures") or {}
           evidence_cache = []
+          target_pass_cache = []
 
           fingerprint_re = re.compile(r"sha256:[0-9a-f]{64}")
           owner_re = re.compile(
@@ -1404,7 +1413,7 @@ jobs:
               if expiry > today + timedelta(days=90):
                   raise SystemExit(f"{label}.expires must be within 90 days")
 
-          def require_pending_evidence(path, metadata):
+          def pending_evidence_payload():
               if not evidence_cache:
                   evidence_result = subprocess.run(
                       [
@@ -1438,6 +1447,10 @@ jobs:
                   raise SystemExit(
                       "protected-base pending fingerprint evidence has invalid schema"
                   )
+              return evidence_payload
+
+          def require_pending_evidence(path, metadata):
+              evidence_payload = pending_evidence_payload()
               entry = evidence_payload["modules"].get(path)
               if not isinstance(entry, dict) or set(entry) != {
                   "fingerprint",
@@ -1458,6 +1471,345 @@ jobs:
                   raise SystemExit(
                       f"pending validation fingerprint evidence mismatch: {path}"
                   )
+
+          def protected_target_passes():
+              if target_pass_cache:
+                  return target_pass_cache[0]
+              result = subprocess.run(
+                  [
+                      "git",
+                      "show",
+                      f"{base_ref}:.axiom/target-validation-passes.json",
+                  ],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  target_pass_cache.append({})
+                  return target_pass_cache[0]
+              try:
+                  target_pass_cache.append(json.loads(result.stdout))
+              except json.JSONDecodeError as error:
+                  raise SystemExit(
+                      "protected-base target-pass evidence is invalid JSON"
+                  ) from error
+              return target_pass_cache[0]
+
+          def print_protected_target_passes():
+              if os.environ.get("RULESPEC_VALIDATION_MODE") != "full-waiver-migration":
+                  return
+              evidence = protected_target_passes()
+              if not evidence:
+                  return
+              required_keys = {
+                  "schema_version",
+                  "evidence_type",
+                  "source_artifact",
+                  "toolchain",
+                  "workflow_run",
+                  "modules",
+              }
+              if (
+                  not isinstance(evidence, dict)
+                  or set(evidence) != required_keys
+                  or evidence.get("schema_version") != 1
+                  or evidence.get("evidence_type")
+                  != "rulespec-target-validation-passes/v1"
+                  or not isinstance(evidence.get("modules"), dict)
+                  or not evidence["modules"]
+              ):
+                  raise SystemExit(
+                      "protected-base target-pass evidence has invalid schema"
+                  )
+
+              source_artifact = evidence.get("source_artifact")
+              if (
+                  not isinstance(source_artifact, dict)
+                  or set(source_artifact) != {"name", "file", "sha256"}
+                  or not isinstance(source_artifact.get("name"), str)
+                  or re.fullmatch(
+                      r"waiver-fingerprints-chunk-[0-9]{3}",
+                      source_artifact["name"],
+                  )
+                  is None
+                  or source_artifact.get("file")
+                  != f"{source_artifact['name']}.json"
+                  or fingerprint_re.fullmatch(
+                      str(source_artifact.get("sha256") or "")
+                  )
+                  is None
+              ):
+                  raise SystemExit(
+                      "protected-base target-pass source artifact is invalid"
+                  )
+
+              selected_roots = {
+                  root.rstrip("/")
+                  for root in os.environ.get("VALIDATE_ROOTS", "").split()
+                  if root.rstrip("/")
+              }
+              relevant_paths = {
+                  path
+                  for path in evidence["modules"]
+                  if any(path.startswith(f"{root}/") for root in selected_roots)
+              }
+              if not relevant_paths:
+                  return
+
+              pending_evidence = pending_evidence_payload()
+              if evidence.get("toolchain") != pending_evidence.get("toolchain"):
+                  raise SystemExit(
+                      "target-pass and pending evidence toolchains do not match"
+                  )
+              run = evidence.get("workflow_run")
+              if not isinstance(run, dict) or set(run) != {
+                  "run_id",
+                  "head_sha",
+                  "conclusion",
+                  "url",
+              }:
+                  raise SystemExit("target-pass workflow evidence has invalid schema")
+              run_id = run.get("run_id")
+              if (
+                  not isinstance(run_id, int)
+                  or isinstance(run_id, bool)
+                  or run_id <= 0
+                  or not isinstance(run.get("head_sha"), str)
+                  or re.fullmatch(r"[0-9a-f]{40}", run["head_sha"]) is None
+                  or run.get("conclusion") != "success"
+                  or run.get("url")
+                  != (
+                      "https://github.com/TheAxiomFoundation/rulespec-us/"
+                      f"actions/runs/{run_id}"
+                  )
+              ):
+                  raise SystemExit("target-pass workflow evidence is invalid")
+
+              run_result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      f"repos/TheAxiomFoundation/rulespec-us/actions/runs/{run_id}",
+                  ],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if run_result.returncode != 0:
+                  raise SystemExit("cannot verify target-pass workflow run")
+              try:
+                  remote_run = json.loads(run_result.stdout)
+              except json.JSONDecodeError as error:
+                  raise SystemExit(
+                      "target-pass workflow run response is invalid JSON"
+                  ) from error
+              if (
+                  not isinstance(remote_run, dict)
+                  or remote_run.get("head_sha") != run["head_sha"]
+                  or remote_run.get("status") != "completed"
+                  or remote_run.get("conclusion") != "success"
+                  or remote_run.get("event") != "pull_request"
+                  or remote_run.get("path")
+                  != ".github/workflows/waiver-fingerprint-scratch.yml"
+              ):
+                  raise SystemExit("target-pass workflow run does not match evidence")
+
+              def protected_run_file(path, *, label):
+                  result = subprocess.run(
+                      [
+                          "gh",
+                          "api",
+                          "repos/TheAxiomFoundation/rulespec-us/contents/"
+                          f"{quote(path, safe='/')}?ref={run['head_sha']}",
+                      ],
+                      check=False,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.DEVNULL,
+                      text=True,
+                  )
+                  if result.returncode != 0:
+                      raise SystemExit(f"cannot verify target-pass {label}")
+                  try:
+                      payload = json.loads(result.stdout)
+                      if (
+                          not isinstance(payload, dict)
+                          or payload.get("type") != "file"
+                          or payload.get("encoding") != "base64"
+                      ):
+                          raise ValueError("unexpected GitHub contents response")
+                      return base64.b64decode(
+                          str(payload.get("content") or "").replace("\n", ""),
+                          validate=True,
+                      )
+                  except (json.JSONDecodeError, ValueError) as error:
+                      raise SystemExit(
+                          f"target-pass {label} response is invalid"
+                      ) from error
+
+              workflow_bytes = protected_run_file(
+                  ".github/workflows/waiver-fingerprint-scratch.yml",
+                  label="workflow source",
+              )
+              # This digest is the independently reviewed, protected v5
+              # fingerprint harness at the recorded run head. The bridge is
+              # intentionally temporary and must not trust arbitrary PR-authored
+              # workflows that happen to emit a similarly named artifact.
+              expected_workflow_digest = (
+                  "sha256:"
+                  "15e65cbdd500cc0ca0c2f9117f93300e6a5859454d21b82b4abcc634a4d889ca"
+              )
+              workflow_digest = "sha256:" + hashlib.sha256(
+                  workflow_bytes
+              ).hexdigest()
+              if workflow_digest != expected_workflow_digest:
+                  raise SystemExit(
+                      "target-pass workflow source is not the reviewed harness"
+                  )
+
+              artifacts_result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "--paginate",
+                      "--slurp",
+                      f"repos/TheAxiomFoundation/rulespec-us/actions/runs/{run_id}/artifacts?per_page=100",
+                  ],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if artifacts_result.returncode != 0:
+                  raise SystemExit("cannot resolve target-pass workflow artifact")
+              try:
+                  artifact_pages = json.loads(artifacts_result.stdout)
+              except json.JSONDecodeError as error:
+                  raise SystemExit(
+                      "target-pass workflow artifact response is invalid JSON"
+                  ) from error
+              if not isinstance(artifact_pages, list) or not all(
+                  isinstance(page, dict)
+                  and isinstance(page.get("artifacts"), list)
+                  for page in artifact_pages
+              ):
+                  raise SystemExit(
+                      "target-pass workflow artifact response has invalid schema"
+                  )
+              artifacts = [
+                  artifact
+                  for page in artifact_pages
+                  for artifact in page["artifacts"]
+              ]
+              matching = [
+                  artifact
+                  for artifact in artifacts or []
+                  if isinstance(artifact, dict)
+                  and artifact.get("name") == source_artifact["name"]
+              ]
+              if (
+                  len(matching) != 1
+                  or matching[0].get("expired") is not False
+                  or not isinstance(matching[0].get("id"), int)
+                  or isinstance(matching[0].get("id"), bool)
+              ):
+                  raise SystemExit("target-pass workflow artifact is unavailable")
+              artifact_result = subprocess.run(
+                  [
+                      "gh",
+                      "api",
+                      "repos/TheAxiomFoundation/rulespec-us/actions/artifacts/"
+                      f"{matching[0]['id']}/zip",
+                  ],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+              )
+              if artifact_result.returncode != 0:
+                  raise SystemExit("cannot download target-pass workflow artifact")
+              try:
+                  with zipfile.ZipFile(io.BytesIO(artifact_result.stdout)) as archive:
+                      if archive.namelist() != [source_artifact["file"]]:
+                          raise SystemExit(
+                              "target-pass workflow artifact has unexpected files"
+                          )
+                      source_bytes = archive.read(source_artifact["file"])
+              except zipfile.BadZipFile as error:
+                  raise SystemExit(
+                      "target-pass workflow artifact is not a valid zip archive"
+                  ) from error
+              source_digest = "sha256:" + hashlib.sha256(source_bytes).hexdigest()
+              if source_digest != source_artifact["sha256"]:
+                  raise SystemExit("target-pass workflow artifact hash mismatch")
+              try:
+                  source_payload = json.loads(source_bytes)
+              except json.JSONDecodeError as error:
+                  raise SystemExit(
+                      "target-pass workflow artifact contains invalid JSON"
+                  ) from error
+              source_modules = (
+                  source_payload.get("modules")
+                  if isinstance(source_payload, dict)
+                  else None
+              )
+              if not isinstance(source_modules, list):
+                  raise SystemExit(
+                      "target-pass workflow artifact has invalid module results"
+                  )
+              source_by_path = {
+                  entry.get("path"): entry
+                  for entry in source_modules
+                  if isinstance(entry, dict) and isinstance(entry.get("path"), str)
+              }
+              if len(source_by_path) != len(source_modules) or set(source_by_path) != set(
+                  evidence["modules"]
+              ):
+                  raise SystemExit(
+                      "target-pass workflow artifact module inventory mismatch"
+                  )
+
+              for path, entry in sorted(evidence["modules"].items()):
+                  require_regular_module(path)
+                  if path in failures:
+                      raise SystemExit(
+                          f"target-pass evidence overlaps validation waiver: {path}"
+                      )
+                  if not isinstance(entry, dict) or set(entry) != {
+                      "fingerprint",
+                      "module_sha256",
+                      "passed",
+                  }:
+                      raise SystemExit(
+                          f"target-pass evidence has invalid module record: {path}"
+                      )
+                  module_digest = "sha256:" + hashlib.sha256(
+                      Path(path).read_bytes()
+                  ).hexdigest()
+                  run_module_digest = "sha256:" + hashlib.sha256(
+                      protected_run_file(path, label=f"module source {path}")
+                  ).hexdigest()
+                  if (
+                      entry.get("passed") is not True
+                      or not isinstance(entry.get("fingerprint"), str)
+                      or fingerprint_re.fullmatch(entry["fingerprint"]) is None
+                      or entry.get("module_sha256") != module_digest
+                      or entry.get("module_sha256") != run_module_digest
+                  ):
+                      raise SystemExit(
+                          f"target-pass evidence mismatch: {path}"
+                      )
+                  source_entry = source_by_path[path]
+                  if (
+                      source_entry.get("passed") is not True
+                      or source_entry.get("fingerprint") != entry["fingerprint"]
+                  ):
+                      raise SystemExit(
+                          f"target-pass workflow artifact mismatch: {path}"
+                      )
+                  if path in relevant_paths and waiver_module_is_unchanged(path):
+                      print(path)
 
           def waiver_module_is_unchanged(path):
               unchanged = path not in changed_paths
@@ -1530,6 +1882,7 @@ jobs:
                       )
                   if waiver_module_is_unchanged(path):
                       print(path)
+          print_protected_target_passes()
           SKIP
           fi
 
