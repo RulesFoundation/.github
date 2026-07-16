@@ -18,10 +18,10 @@ on:
         default: main
       oracle-coverage-axiom-encode-ref:
         description: >-
-          Git ref for TheAxiomFoundation/axiom-encode used only by changed-file
-          PolicyEngine oracle coverage classification. This intentionally
-          defaults to main so new oracle mappings can unblock generated
-          RuleSpec PRs without forcing a full validation toolchain bump.
+          Git ref for TheAxiomFoundation/axiom-encode used by PolicyEngine
+          oracle coverage classification. This intentionally defaults to main
+          so new oracle mappings can unblock generated RuleSpec PRs without
+          forcing a full validation toolchain bump.
         required: false
         type: string
         default: main
@@ -1113,9 +1113,8 @@ jobs:
           new_line = after[changed[0]].rstrip("\r\n")
           old = re.fullmatch(
               r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
-              r"workflows/(?:validate-rulespec|"
-              r"validate-rulespec-legacy-pending-safe)\.yml@"
-              r"[0-9a-f]{40}(?:\s+#.*)?",
+              r"workflows/(?P<workflow>validate-rulespec(?:-legacy-pending-safe)?)"
+              r"\.yml@[0-9a-f]{40}(?:\s+#.*)?",
               old_line,
           )
           new = re.fullmatch(
@@ -1126,7 +1125,10 @@ jobs:
           )
           if old is None or new is None or old["indent"] != new["indent"]:
               raise SystemExit(1)
-          print("Caller change is an isolated pinned compatibility-bridge transition.")
+          if old["workflow"] == "validate-rulespec":
+              print("Caller change is an isolated pinned compatibility-bridge transition.")
+          else:
+              print("Caller change is an isolated pinned compatibility-bridge refresh.")
           PY
           }
 
@@ -2280,6 +2282,78 @@ jobs:
             --money-atoms-only \
             --money-atom-root "$GITHUB_WORKSPACE" \
             "${ratchet_args[@]}"
+
+      # A pending-ledger change deliberately requests a repository-wide coverage
+      # check, as does every non-PR run, but the legacy validation encoder may pin
+      # older oracle mappings than the classifier which produced that ledger.
+      # Refresh only the axiom-oracles data dependency here: installing the
+      # current encoder would replace the legacy CLI and break its
+      # parent-directory checkout layout.
+      - name: Checkout full-coverage oracle mappings
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: TheAxiomFoundation/axiom-encode
+          ref: ${{ inputs.oracle-coverage-axiom-encode-ref }}
+          path: _axiom/axiom-encode-oracle-coverage-full
+
+      - name: Install full-coverage oracle mappings
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          oracles_spec="$(
+            python - <<'PY'
+          import pathlib
+          import re
+          import sys
+          import tomllib
+
+          payload = tomllib.loads(pathlib.Path(
+              "_axiom/axiom-encode-oracle-coverage-full/pyproject.toml"
+          ).read_text())
+          dependencies = payload.get("project", {}).get("dependencies", [])
+
+          def canonical_dependency_name(dependency):
+              if not isinstance(dependency, str):
+                  return None
+              match = re.match(
+                  r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
+                  r"(?=$|\s|@|[<>=!~;(\[])",
+                  dependency.strip(),
+              )
+              if match is None:
+                  return None
+              return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+          oracle_dependencies = [
+              dependency
+              for dependency in dependencies
+              if canonical_dependency_name(dependency) == "axiom-oracles"
+          ]
+          if len(oracle_dependencies) != 1:
+              print(
+                  "Current oracle-coverage classifier must declare exactly one "
+                  "axiom-oracles dependency.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          match = re.fullmatch(
+              r"axiom-oracles @ git\+https://github\.com/"
+              r"TheAxiomFoundation/axiom-oracles@[0-9a-f]{40}",
+              oracle_dependencies[0].strip(),
+          )
+          if match is None:
+              print(
+                  "Current oracle-coverage classifier must pin axiom-oracles "
+                  "to an exact TheAxiomFoundation commit.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          print(match.group(0))
+          PY
+          )"
+          python -m pip install --force-reinstall --no-deps "$oracles_spec"
 
       - name: Validate PolicyEngine oracle coverage classification
         if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
