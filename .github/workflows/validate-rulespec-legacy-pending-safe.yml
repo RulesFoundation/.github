@@ -1073,6 +1073,60 @@ jobs:
           PY
           }
 
+          is_bridge_pin_only() {
+            if [ "${#all_changed_paths[@]}" -ne 1 ]; then
+              return 1
+            fi
+            local path="${all_changed_paths[0]}"
+            case "$path" in
+              .github/workflows/*.yml|.github/workflows/*.yaml) ;;
+              *) return 1 ;;
+            esac
+            python - "$base_ref" "$path" <<'PY'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          base_ref, path = sys.argv[1:]
+          result = subprocess.run(
+              ["git", "show", f"{base_ref}:{path}"],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL,
+              text=True,
+          )
+          if result.returncode != 0:
+              raise SystemExit(1)
+          before = result.stdout.splitlines(keepends=True)
+          after = Path(path).read_text().splitlines(keepends=True)
+          changed = [
+              index
+              for index, pair in enumerate(zip(before, after, strict=False))
+              if pair[0] != pair[1]
+          ]
+          if len(before) != len(after) or len(changed) != 1:
+              raise SystemExit(1)
+
+          old_line = before[changed[0]].rstrip("\r\n")
+          new_line = after[changed[0]].rstrip("\r\n")
+          old = re.fullmatch(
+              r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
+              r"workflows/validate-rulespec\.yml@[0-9a-f]{40}(?:\s+#.*)?",
+              old_line,
+          )
+          new = re.fullmatch(
+              r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
+              r"workflows/validate-rulespec-legacy-pending-safe\.yml@"
+              r"[0-9a-f]{40}(?:\s+#.*)?",
+              new_line,
+          )
+          if old is None or new is None or old["indent"] != new["indent"]:
+              raise SystemExit(1)
+          print("Caller change is an isolated pinned compatibility-bridge transition.")
+          PY
+          }
+
           mode="full-push"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_ref="${{ github.event.pull_request.base.sha }}"
@@ -1097,13 +1151,23 @@ jobs:
             for path in "${all_changed_paths[@]}"; do
               case "$path" in
                 .github/workflows/*.yml|.github/workflows/*.yaml)
-                  mode="full-toolchain-bump"
+                  if is_bridge_pin_only; then
+                    mode="changed"
+                  else
+                    mode="full-toolchain-bump"
+                  fi
                   break
                   ;;
                 known-validation-gaps.yaml)
-                  # Pending approvals are meaningful only if every referenced
-                  # module validates under the protected-base toolchain.
-                  mode="full-toolchain-bump"
+                  # Validate every unwaived module while exact evidence-backed
+                  # pending failures stay in the migration lane.
+                  mode="full-waiver-migration"
+                  break
+                  ;;
+                oracle-coverage-pending.yaml)
+                  # This ratchet is repository-wide but does not change any
+                  # RuleSpec module, so run full oracle coverage only.
+                  mode="full-oracle-coverage"
                   break
                   ;;
                 .axiom/toolchain.toml)
@@ -1117,7 +1181,7 @@ jobs:
               esac
             done
 
-            if [ "$mode" = "full-toolchain-bump" ]; then
+            if [ "$mode" = "full-toolchain-bump" ] || [ "$mode" = "full-waiver-migration" ]; then
               add_all_rulespec_targets
             else
               for path in "${all_changed_paths[@]}"; do
@@ -1163,9 +1227,9 @@ jobs:
 
           mapfile -t rulespec_files < "$RULESPEC_FILE_LIST"
 
-          # Ratcheted pre-existing validate failures: only active records skip
-          # validation. Pending records preapprove a future transition and
-          # must continue to validate under the protected-base toolchain.
+          # Ratcheted pre-existing validation failures: protected active
+          # records and exact evidence-backed pending records skip unchanged
+          # modules. Pending never becomes active in this bridge.
           skip_list="$RUNNER_TEMP/validate-skip.txt"
           : > "$skip_list"
           if [ -f known-validation-gaps.yaml ]; then
@@ -1395,11 +1459,11 @@ jobs:
                       f"pending validation fingerprint evidence mismatch: {path}"
                   )
 
-          def active_module_is_unchanged(path):
+          def waiver_module_is_unchanged(path):
               unchanged = path not in changed_paths
               if not unchanged:
                   print(
-                      f"ACTIVE WAIVER NOT SKIPPED (module changed): {path}",
+                      f"VALIDATION WAIVER NOT SKIPPED (module changed): {path}",
                       file=sys.stderr,
                   )
               return unchanged
@@ -1424,14 +1488,10 @@ jobs:
                       else {}
                   )
                   pending = states.get("pending")
-                  if (
-                      pending is not None
-                      and (
-                          not isinstance(base_states, dict)
-                          or base_states.get("pending") != pending
-                      )
-                  ):
+                  pending_authorized = pending is not None
+                  if pending_authorized:
                       require_pending_evidence(path, pending)
+                  active_authorized = False
                   if isinstance(states, dict) and states.get("active") is not None:
                       if not isinstance(base_failures, (dict, list)):
                           raise SystemExit(
@@ -1454,8 +1514,12 @@ jobs:
                           raise SystemExit(
                               f"unauthorized active validation waiver: {path}"
                           )
-                      if active_module_is_unchanged(path):
-                          print(path)
+                      active_authorized = True
+                  if (
+                      (active_authorized or pending_authorized)
+                      and waiver_module_is_unchanged(path)
+                  ):
+                      print(path)
           else:
               # Preserve support for callers that still use the legacy list.
               for path in failures:
@@ -1464,7 +1528,7 @@ jobs:
                       raise SystemExit(
                           f"unauthorized legacy validation waiver: {path}"
                       )
-                  if active_module_is_unchanged(path):
+                  if waiver_module_is_unchanged(path):
                       print(path)
           SKIP
           fi
@@ -1547,8 +1611,7 @@ jobs:
             exit 0
           fi
 
-          # Reuse the active-only skip list built by the validation step.
-          # Pending records remain strict here.
+          # Reuse the evidence-checked skip list built by the validation step.
           skip_list="$RUNNER_TEMP/validate-skip.txt"
           prefixed=()
           for file in "${rulespec_files[@]}"; do
@@ -1627,7 +1690,7 @@ jobs:
             "${ratchet_args[@]}"
 
       - name: Validate PolicyEngine oracle coverage classification
-        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' }}
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1638,7 +1701,7 @@ jobs:
             --limit 50
 
       - name: Checkout changed-file oracle coverage classifier
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-encode
@@ -1646,7 +1709,7 @@ jobs:
           path: _axiom/axiom-encode-oracle-coverage
 
       - name: Install changed-file oracle coverage classifier
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1684,7 +1747,7 @@ jobs:
           PY
 
       - name: Validate changed PolicyEngine oracle coverage classification
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
         shell: bash
         run: |
           set -euo pipefail
