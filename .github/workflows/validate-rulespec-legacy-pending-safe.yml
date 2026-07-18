@@ -107,6 +107,53 @@ jobs:
           # against the head to see which jurisdiction subtrees changed.
           fetch-depth: 0
 
+      - name: Reject unsupported tracked paths
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          set -euo pipefail
+          if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            if git rev-parse --verify "$GITHUB_SHA^" >/dev/null 2>&1; then
+              BASE_SHA="$(git rev-parse "$GITHUB_SHA^")"
+            else
+              BASE_SHA=""
+            fi
+          fi
+          {
+            git ls-files -z
+            if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              git diff --name-only -z --no-renames --diff-filter=ACMRTD "$BASE_SHA" "$GITHUB_SHA"
+            fi
+          } | python3 -c '
+          import os
+          import sys
+
+          paths = [
+              os.fsdecode(path)
+              for path in sys.stdin.buffer.read().split(b"\0")
+              if path
+          ]
+          invalid = []
+          for path in paths:
+              try:
+                  path.encode("utf-8")
+              except UnicodeEncodeError:
+                  invalid.append(path)
+                  continue
+              if any(
+                  ord(character) < 32
+                  or ord(character) == 127
+                  or ord(character) in {0x85, 0x2028, 0x2029}
+                  for character in path
+              ):
+                  invalid.append(path)
+          if invalid:
+              for path in invalid:
+                  print(f"unsupported tracked path: {path!r}", file=sys.stderr)
+              raise SystemExit(1)
+          '
+
       - name: Compute validation shards
         id: compute
         shell: bash
@@ -188,14 +235,16 @@ jobs:
               full(f"event={event or 'unknown'}")
 
           diff = subprocess.run(
-              ["git", "diff", "--name-only", "--no-renames",
+              ["git", "diff", "--name-only", "-z", "--no-renames",
                "--diff-filter=ACMRTD", base, head],
-              stdout=subprocess.PIPE, text=True,
+              stdout=subprocess.PIPE,
           )
           if diff.returncode != 0:
               full("git diff failed")
 
-          changed = [line.strip() for line in diff.stdout.splitlines() if line.strip()]
+          changed = [
+              os.fsdecode(path) for path in diff.stdout.split(b"\0") if path
+          ]
           if not changed:
               full("empty diff")
 
@@ -288,6 +337,7 @@ jobs:
                   "git",
                   "diff",
                   "--name-only",
+                  "-z",
                   "--no-renames",
                   "--diff-filter=ACMRTD",
                   base_ref,
@@ -295,8 +345,8 @@ jobs:
               ],
               check=True,
               stdout=subprocess.PIPE,
-              text=True,
-          ).stdout.splitlines()
+          ).stdout.split(b"\0")
+          changed = [os.fsdecode(path) for path in changed if path]
           if waiver_path not in changed:
               raise SystemExit
 
@@ -1159,8 +1209,8 @@ jobs:
           mode="full-push"
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_ref="${{ github.event.pull_request.base.sha }}"
-            mapfile -t all_changed_paths < <(
-              git diff --name-only --no-renames --diff-filter=ACMRTD "$base_ref" "$GITHUB_SHA"
+            mapfile -d '' -t all_changed_paths < <(
+              git diff --name-only -z --no-renames --diff-filter=ACMRTD "$base_ref" "$GITHUB_SHA"
             )
             waiver_changed=false
             trust_inputs_changed=false
