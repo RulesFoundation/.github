@@ -713,25 +713,14 @@ jobs:
             --supervisor "$RUNNER_TEMP/axiom-encode-signing-supervisor" \
             --site-packages "$RUNNER_TEMP/axiom-verification-site-packages" \
             --apply-root "$TRUST_APPLY_ROOT" --eval-root "$TRUST_EVAL_ROOT" \
-            --corpus-release-root "$TRUST_CORPUS_RELEASE_ROOT"
+            --corpus-release-root "$TRUST_CORPUS_RELEASE_ROOT" \
+            --git "$(command -v git)"
           sudo chown -R 0:0 /opt/axiom-verification
           sudo chmod -R go-w /opt/axiom-verification
           # The supervisor refuses a trust chain with group/other-writable
           # ancestors, and /opt ships group-writable on hosted runners.
           # Harden the directory bit itself (contents are untouched; nothing
           # later in this job creates new /opt entries).
-          # The supervised child's PATH is exactly the trusted tool directory
-          # (the supervisor exports no ambient PATH), and the checkout-identity
-          # probes shell out to git builtins (rev-parse --show-toplevel,
-          # remote get-url origin) whenever a module sits inside a git
-          # boundary — which every CI workspace does. Provision the runner's
-          # git binary alongside the trusted tools so those probes fail closed
-          # on identity, not on a missing binary.
-          # With a provisioned python runtime the supervisor rewrites exec to
-          # the trusted interpreter, so the child's PATH (= dirname of the
-          # exec'd command) is the runtime's bin directory — install git
-          # THERE, not at the verification root.
-          sudo install -m 0755 "$(command -v git)" /opt/axiom-verification/python/bin/git
           sudo chown root:root /opt
           sudo chmod go-w /opt
 
