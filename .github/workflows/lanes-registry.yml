@@ -31,3 +31,13 @@ jobs:
           git add LANES.md
           git commit -m "chore: update encoding lane registry"
           git push
+
+      # Optional push-sync to Slack: uncomment after adding the SLACK_LANES_WEBHOOK secret.
+      # - name: Notify Slack on change
+      #   if: steps.commit.outputs.changed == 'true'
+      #   run: |
+      #     curl -s -X POST -H 'Content-type: application/json' \
+      #       --data '{"text":"LANES.md updated: https://github.com/TheAxiomFoundation/.github/blob/main/LANES.md"}' \
+      #       "$SLACK_LANES_WEBHOOK"
+      #   env:
+      #     SLACK_LANES_WEBHOOK: ${{ secrets.SLACK_LANES_WEBHOOK }}

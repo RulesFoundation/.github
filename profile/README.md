@@ -41,3 +41,5 @@ Plus per-state repos (`rulespec-us-co`, `rulespec-us-tx`, …) — see
 
 - https://axiom-foundation.org
 - hello@axiom-foundation.org
+
+**[Encoding lane registry](../LANES.md)** — live board of every jurisdiction lane: activity, release pins, owners, standing constraints. Auto-refreshed every 6h.
