@@ -1823,18 +1823,26 @@ jobs:
                   stderr=subprocess.DEVNULL,
               )
               if base_toolchain_result.returncode != 0:
-                  raise SystemExit(
-                      "protected base lacks the legacy toolchain from the evidence run"
+                  print(
+                      "TARGET PASS NOT SKIPPED "
+                      "(protected base lacks comparable toolchain): "
+                      + " ".join(sorted(relevant_paths)),
+                      file=sys.stderr,
                   )
+                  return
               run_base_toolchain = protected_run_file(
                   ".axiom/toolchain.toml",
                   ref=run_base_sha,
                   label="protected-base toolchain source",
               )
               if base_toolchain_result.stdout != run_base_toolchain:
-                  raise SystemExit(
-                      "protected-base toolchain drifted since target-pass evidence"
+                  print(
+                      "TARGET PASS NOT SKIPPED "
+                      "(protected-base toolchain drifted): "
+                      + " ".join(sorted(relevant_paths)),
+                      file=sys.stderr,
                   )
+                  return
 
               execution_toolchain_bytes = protected_run_file(
                   ".axiom/toolchain.toml",
