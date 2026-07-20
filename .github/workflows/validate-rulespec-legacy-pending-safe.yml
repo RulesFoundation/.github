@@ -1719,24 +1719,8 @@ jobs:
                   or remote_run.get("path")
                   != ".github/workflows/waiver-fingerprint-scratch.yml"
                   or not isinstance(pull_requests, list)
-                  or len(pull_requests) != 1
-                  or not isinstance(pull_requests[0], dict)
               ):
                   raise SystemExit("target-pass workflow run does not match evidence")
-
-              run_pull_request = pull_requests[0]
-              run_base = run_pull_request.get("base")
-              run_head = run_pull_request.get("head")
-              if (
-                  not isinstance(run_base, dict)
-                  or not isinstance(run_head, dict)
-                  or not isinstance(run_base.get("sha"), str)
-                  or re.fullmatch(r"[0-9a-f]{40}", run_base["sha"]) is None
-                  or run_head.get("sha") != run["head_sha"]
-              ):
-                  raise SystemExit(
-                      "target-pass workflow pull request does not match evidence"
-                  )
 
               # The protected job log records the exact synthetic merge commit
               # checked out by this run. GitHub's run-level head_sha is only the
@@ -1772,11 +1756,32 @@ jobs:
                   or execution_commit.get("sha") != execution_sha
                   or not isinstance(execution_parents, list)
                   or not all(isinstance(parent, dict) for parent in execution_parents)
-                  or [parent.get("sha") for parent in execution_parents]
-                  != [run_base["sha"], run["head_sha"]]
+                  or len(execution_parents) != 2
+                  or not isinstance(execution_parents[0].get("sha"), str)
+                  or re.fullmatch(r"[0-9a-f]{40}", execution_parents[0]["sha"])
+                  is None
+                  or execution_parents[1].get("sha") != run["head_sha"]
               ):
                   raise SystemExit(
                       "target-pass execution commit does not match the workflow run"
+                  )
+              run_base_sha = execution_parents[0]["sha"]
+              if len(pull_requests) == 1 and isinstance(pull_requests[0], dict):
+                  run_pull_request = pull_requests[0]
+                  run_base = run_pull_request.get("base")
+                  run_head = run_pull_request.get("head")
+                  if (
+                      not isinstance(run_base, dict)
+                      or not isinstance(run_head, dict)
+                      or run_base.get("sha") != run_base_sha
+                      or run_head.get("sha") != run["head_sha"]
+                  ):
+                      raise SystemExit(
+                          "target-pass workflow pull request does not match evidence"
+                      )
+              elif pull_requests:
+                  raise SystemExit(
+                      "target-pass workflow pull request metadata is ambiguous"
                   )
 
               def protected_run_file(path, *, ref, label):
@@ -1823,7 +1828,7 @@ jobs:
                   )
               run_base_toolchain = protected_run_file(
                   ".axiom/toolchain.toml",
-                  ref=run_base["sha"],
+                  ref=run_base_sha,
                   label="protected-base toolchain source",
               )
               if base_toolchain_result.stdout != run_base_toolchain:
