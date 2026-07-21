@@ -4,11 +4,11 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-20 — Re-pin toolchain to corpus release nz-rulespec-2026-07-19 (#96) | 5 | nz-rulespec-2026-07-20 | 8edec1c8d6104146899f8a6aa55f314ff900f7e2 | success |
+| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-21 — Re-point container-level proof atoms to text-bearing provisions (#97) (#98) | 5 | nz-rulespec-2026-07-20 | 8edec1c8d6104146899f8a6aa55f314ff900f7e2 | success |
+| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-21 — ci: make signed-apply open_pr git-add tolerant of absent optional paths (#21) | 8 | tz-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-20 — Encode Medicaid community engagement gaps (#945) | 50 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 1 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-18 — Merge pull request #20 from TheAxiomFoundation/ci/validate-proof-positional | 12 | de-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
-| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-18 — Merge pull request #20 from TheAxiomFoundation/ci/validate-proof-positional | 9 | tz-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-18 — Compose Colorado EITC pilot pipeline (39-22-123.5) (#943) | 51 | — | 3869d66d009f52258be35901edbef370e65a399c | failure |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-17 — Migrate rulespec-rw to canonical provenance validation (#10) | 0 | rw-rulespec-2026-07-16 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
 | [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-13 — Migrate Belgium to canonical provenance validation (#115) | 0 | be-rulespec-2026-07-10 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-13 — Migrate to the canonical signed corpus release (ug-rulespec-2026-07-10) (#11) | 1 | ug-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
