@@ -76,6 +76,15 @@ on:
         required: false
         type: string
         default: ""
+      validation-waiver-bootstrap-sha256:
+        description: >-
+          Exact SHA-256 of the reviewed rulespec-us PR #911 waiver file. This
+          preserves that migration's pre-existing waiver baseline when main
+          has independently removed records; every later change remains
+          decrement-only.
+        required: false
+        type: string
+        default: ""
       guard-programs-root:
         description: >-
           Whether to require encoding manifests on the composed-pilot
@@ -1172,6 +1181,11 @@ jobs:
       - name: Enforce validation waiver ratchet
         if: ${{ matrix.shard == needs.shards.outputs.first }}
         shell: bash
+        env:
+          BOOTSTRAP_SHA256: ${{ inputs.validation-waiver-bootstrap-sha256 }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -1183,10 +1197,38 @@ jobs:
           fi
           protected_base="$RUNNER_TEMP/protected-known-validation-gaps.yaml"
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
-          git show "$base_ref:known-validation-gaps.yaml" > "$protected_base" || {
-            echo "ValidationWaiverBaseMissing: protected base must contain known-validation-gaps.yaml" >&2
-            exit 1
-          }
+          if [ -n "$BOOTSTRAP_SHA256" ]; then
+            expected_bootstrap="bedeb89a4d0cfce60d9a83a705fa3e15826685e636d71381192e70c2e5cfb1e3"
+            migration_event=false
+            if [ "$GITHUB_REPOSITORY" = "TheAxiomFoundation/rulespec-us" ]; then
+              if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "911" ]; then
+                migration_event=true
+              elif [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && \
+                   [[ "$HEAD_COMMIT_MESSAGE" == "Merge pull request #911 from "* ]]; then
+                migration_event=true
+              fi
+            fi
+            if [ "$migration_event" != true ]; then
+              echo "ValidationWaiverBootstrapUnauthorized: bootstrap is restricted to rulespec-us PR #911 and its merge push" >&2
+              exit 1
+            fi
+            if [ "$BOOTSTRAP_SHA256" != "$expected_bootstrap" ]; then
+              echo "ValidationWaiverBootstrapHashRejected: unsupported bootstrap hash" >&2
+              exit 1
+            fi
+            current_sha256="$(sha256sum known-validation-gaps.yaml | cut -d ' ' -f 1)"
+            if [ "$current_sha256" != "$BOOTSTRAP_SHA256" ]; then
+              echo "ValidationWaiverBootstrapHashMismatch: known-validation-gaps.yaml sha256 $current_sha256 != bootstrap $BOOTSTRAP_SHA256" >&2
+              exit 1
+            fi
+            cp known-validation-gaps.yaml "$protected_base"
+            echo "Accepted exact rulespec-us PR #911 validation-waiver bootstrap."
+          else
+            git show "$base_ref:known-validation-gaps.yaml" > "$protected_base" || {
+              echo "ValidationWaiverBaseMissing: protected base must contain known-validation-gaps.yaml" >&2
+              exit 1
+            }
+          fi
           git diff --name-only -z --no-renames --diff-filter=ACMRTD \
             "$base_ref" "$GITHUB_SHA" | LC_ALL=C tr '\0' '\n' > "$changed_paths"
           python - "$protected_base" known-validation-gaps.yaml <<'PY'
