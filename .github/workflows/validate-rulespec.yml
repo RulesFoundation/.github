@@ -68,6 +68,14 @@ on:
         required: false
         type: boolean
         default: true
+      retired-schema-bootstrap-sha256:
+        description: >-
+          Exact SHA-256 of the one reviewed rulespec-us PR #911 freeze file.
+          Leave empty for every ordinary pull request and push; after that
+          migration the inventory is sealed and decrement-only.
+        required: false
+        type: string
+        default: ""
       guard-programs-root:
         description: >-
           Whether to require encoding manifests on the composed-pilot
@@ -587,6 +595,244 @@ jobs:
             --target "$RUNNER_TEMP/axiom-verification-site-packages" \
             ./_axiom/axiom-encode
 
+      - name: Verify immutable retired-schema freeze
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BOOTSTRAP_SHA256: ${{ inputs.retired-schema-bootstrap-sha256 }}
+          CALLER_REPOSITORY: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref }}
+          IS_FIRST_SHARD: ${{ matrix.shard == needs.shards.outputs.first }}
+          RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
+        run: |
+          set -euo pipefail
+          python - "$RUNNER_TEMP/retired-schema-skip.txt" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import PurePosixPath
+
+          import yaml
+
+          freeze_path = ".axiom/retired-schema-freeze.json"
+          output_path = sys.argv[1]
+          module_re = re.compile(
+              r"us(?:-[a-z]{2})?/(?:legislation|policies|regulations|statutes)/.+\.ya?ml"
+          )
+
+          def fail(message: str) -> None:
+              raise SystemExit(f"RetiredSchemaFreezeError: {message}")
+
+          def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+              return subprocess.run(
+                  ["git", *args], check=check, capture_output=True
+              )
+
+          def immutable_blob(ref: str, path: str, *, missing_ok: bool = False) -> bytes | None:
+              tree = git("ls-tree", "-z", ref, "--", path).stdout
+              if not tree:
+                  if missing_ok:
+                      return None
+                  fail(f"immutable tree is missing {path} at {ref}")
+              records = [record for record in tree.split(b"\0") if record]
+              if len(records) != 1:
+                  fail(f"immutable tree has an ambiguous entry for {path} at {ref}")
+              try:
+                  metadata, listed_path = records[0].split(b"\t", 1)
+                  mode, kind, _object_id = metadata.split(b" ", 2)
+                  decoded_path = listed_path.decode("utf-8")
+              except (UnicodeDecodeError, ValueError) as exc:
+                  fail(f"immutable tree entry is malformed for {path}: {exc}")
+              if decoded_path != path or mode != b"100644" or kind != b"blob":
+                  fail(f"immutable tree entry is not a regular non-executable file: {path}")
+              return git("show", f"{ref}:{path}").stdout
+
+          def inventory(raw: bytes, *, label: str) -> dict[str, str]:
+              try:
+                  payload = json.loads(raw)
+              except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                  fail(f"{label} is not valid UTF-8 JSON: {exc}")
+              if not isinstance(payload, dict):
+                  fail(f"{label} must contain a JSON object")
+              if payload.get("format") != "axiom/retired-schema-freeze/v1":
+                  fail(f"{label} has an unsupported format")
+              artifacts = payload.get("artifacts")
+              if not isinstance(artifacts, dict):
+                  fail(f"{label}.artifacts must be an object")
+              result = {}
+              for raw_path, digest in artifacts.items():
+                  if not isinstance(raw_path, str) or module_re.fullmatch(raw_path) is None:
+                      fail(f"{label} contains an invalid rulespec-us module: {raw_path!r}")
+                  parsed = PurePosixPath(raw_path)
+                  if parsed.is_absolute() or ".." in parsed.parts:
+                      fail(f"{label} contains an unsafe module path: {raw_path}")
+                  if (
+                      not isinstance(digest, str)
+                      or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+                  ):
+                      fail(f"{label} has an invalid SHA-256 for {raw_path}")
+                  result[raw_path] = digest
+              return result
+
+          def has_retired_source_field(raw: bytes, *, path: str) -> bool:
+              try:
+                  payload = yaml.safe_load(raw)
+              except yaml.YAMLError as exc:
+                  fail(f"retired-schema module is not valid YAML at {path}: {exc}")
+              if not isinstance(payload, dict):
+                  return False
+              module = payload.get("module")
+              if not isinstance(module, dict):
+                  return False
+              source_verification = module.get("source_verification")
+              return isinstance(source_verification, dict) and bool(
+                  {"corpus_citation_paths", "upstream_source_check"}
+                  & set(source_verification)
+              )
+
+          head_ref = os.environ["GITHUB_SHA"]
+          base_ref = os.environ.get("BASE_SHA", "")
+          if not base_ref or base_ref == "0000000000000000000000000000000000000000":
+              base_ref = f"{head_ref}^"
+
+          head_raw = immutable_blob(head_ref, freeze_path, missing_ok=True)
+          head = inventory(head_raw, label="head freeze") if head_raw is not None else {}
+          for module, expected_digest in sorted(head.items()):
+              raw = immutable_blob(head_ref, module)
+              assert raw is not None
+              actual_digest = hashlib.sha256(raw).hexdigest()
+              if actual_digest != expected_digest:
+                  fail(
+                      f"frozen module digest mismatch for {module}: "
+                      f"{actual_digest} != {expected_digest}"
+                  )
+              if not has_retired_source_field(raw, path=module):
+                  fail(f"module has no retired source-verification field: {module}")
+
+          if os.environ["IS_FIRST_SHARD"] == "true":
+              candidates = git(
+                  "grep",
+                  "-l",
+                  "-e",
+                  "corpus_citation_paths:",
+                  "-e",
+                  "upstream_source_check:",
+                  head_ref,
+                  "--",
+                  "*.yaml",
+                  "*.yml",
+                  check=False,
+              )
+              if candidates.returncode not in {0, 1}:
+                  fail("git grep could not inspect the immutable RuleSpec tree")
+              discovered = set()
+              prefix = f"{head_ref}:"
+              for item in candidates.stdout.splitlines():
+                  if not item:
+                      continue
+                  try:
+                      module = item.decode("utf-8")
+                  except UnicodeDecodeError as exc:
+                      fail(f"immutable tree contains a non-UTF-8 path: {exc}")
+                  if module.startswith(prefix):
+                      module = module[len(prefix):]
+                  if module_re.fullmatch(module) is None:
+                      continue
+                  raw = immutable_blob(head_ref, module)
+                  assert raw is not None
+                  if has_retired_source_field(raw, path=module):
+                      discovered.add(module)
+              if discovered != set(head):
+                  fail(
+                      "inventory mismatch; "
+                      f"unlisted={sorted(discovered - set(head))}, "
+                      f"missing={sorted(set(head) - discovered)}"
+                  )
+
+              base_raw = immutable_blob(base_ref, freeze_path, missing_ok=True)
+              base = (
+                  inventory(base_raw, label="protected-base freeze")
+                  if base_raw is not None
+                  else {}
+              )
+              if base_raw is not None and head_raw is None:
+                  fail("the sealed freeze file cannot be removed")
+              bootstrap_digest = os.environ.get("BOOTSTRAP_SHA256", "").strip()
+              if bootstrap_digest:
+                  authorized_pr = (
+                      os.environ["EVENT_NAME"] == "pull_request"
+                      and os.environ.get("PR_NUMBER") == "911"
+                  )
+                  push_candidate = (
+                      os.environ["EVENT_NAME"] == "push"
+                      and os.environ.get("REF_NAME") == "refs/heads/main"
+                      and re.fullmatch(
+                          r"Merge pull request #911 from .+",
+                          (
+                              os.environ.get("HEAD_MESSAGE", "").splitlines() or [""]
+                          )[0],
+                      )
+                      is not None
+                  )
+                  authorized_push = False
+                  if push_candidate:
+                      commit = git("rev-list", "--parents", "-n", "1", head_ref).stdout
+                      parents = commit.decode("ascii").strip().split()
+                      if len(parents) != 3 or parents[1] != base_ref:
+                          fail("bootstrap push must be the first-parent merge of PR #911")
+                      topic_parent = parents[2]
+                      if git(
+                          "merge-base", "--is-ancestor", topic_parent, base_ref, check=False
+                      ).returncode == 0:
+                          fail("bootstrap topic parent was already merged into the protected base")
+                      topic_raw = immutable_blob(topic_parent, freeze_path)
+                      assert topic_raw is not None
+                      authorized_push = (
+                          hashlib.sha256(topic_raw).hexdigest() == bootstrap_digest
+                      )
+                  if (
+                      os.environ.get("CALLER_REPOSITORY")
+                      != "TheAxiomFoundation/rulespec-us"
+                      or not (authorized_pr or authorized_push)
+                  ):
+                      fail("bootstrap is not authorized for this caller or event")
+                  if re.fullmatch(r"[0-9a-f]{64}", bootstrap_digest) is None:
+                      fail("bootstrap digest must be a lowercase SHA-256")
+                  if head_raw is None or hashlib.sha256(head_raw).hexdigest() != bootstrap_digest:
+                      fail("bootstrap digest does not match the immutable head freeze")
+                  if base_raw is not None:
+                      fail("bootstrap requires the freeze file to be absent from the base")
+              else:
+                  additions = sorted(set(head) - set(base))
+                  changed = sorted(
+                      module
+                      for module in set(head) & set(base)
+                      if head[module] != base[module]
+                  )
+                  if additions or changed:
+                      fail(
+                          "freeze is decrement-only; "
+                          f"added={additions}, changed={changed}"
+                      )
+              if (
+                  os.environ.get("CALLER_REPOSITORY")
+                  == "TheAxiomFoundation/rulespec-us"
+                  and os.environ.get("RUN_GENERATED_GUARD") != "true"
+                  and not bootstrap_digest
+              ):
+                  fail("generated guard bypass requires an authorized bootstrap")
+
+          with open(output_path, "w", encoding="utf-8") as output:
+              output.writelines(f"{module}\n" for module in sorted(head))
+          print(f"Verified {len(head)} immutable retired-schema module(s).")
+          PY
+
       - name: Fetch pinned signed corpus release object
         shell: bash
         env:
@@ -739,15 +985,6 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
           if [ "$(basename "$GITHUB_WORKSPACE")" != "rulespec-us" ]; then
             ln -sfn "$GITHUB_WORKSPACE/_axiom/rulespec-us" "$GITHUB_WORKSPACE/../rulespec-us"
-          fi
-
-      - name: Run repository tests
-        if: ${{ inputs.run-pytest && matrix.shard == needs.shards.outputs.first }}
-        run: |
-          if [ -d tests ] && find tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
-            python -m pytest -q tests
-          else
-            echo "No Python tests found; skipping pytest."
           fi
 
       - name: Reject obsolete generated files
@@ -1258,6 +1495,8 @@ jobs:
                       print(module)
           SKIP
           fi
+          cat "$RUNNER_TEMP/retired-schema-skip.txt" >> "$skip_list"
+          sort -u "$skip_list" -o "$skip_list"
 
           selected=()
           for file in "${rulespec_files[@]}"; do
@@ -1378,6 +1617,8 @@ jobs:
                       print(module)
           SKIP
           fi
+          cat "$RUNNER_TEMP/retired-schema-skip.txt" >> "$skip_list"
+          sort -u "$skip_list" -o "$skip_list"
 
           prefixed=()
           for file in "${rulespec_files[@]}"; do
@@ -1588,6 +1829,17 @@ jobs:
 
           print(f"Changed PolicyEngine oracle coverage passed for {len(items)} output(s).")
           PY
+
+      # Repository-controlled tests run only after every trusted validation
+      # consumer has finished with RUNNER_TEMP artifacts.
+      - name: Run repository tests
+        if: ${{ inputs.run-pytest && matrix.shard == needs.shards.outputs.first }}
+        run: |
+          if [ -d tests ] && find tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
+            python -m pytest -q tests
+          else
+            echo "No Python tests found; skipping pytest."
+          fi
 
   validate-complete:
     # Matrix jobs get suffixed check names such as `validate (us-ca)`.
