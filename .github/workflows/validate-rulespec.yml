@@ -1185,6 +1185,7 @@ jobs:
           BOOTSTRAP_SHA256: ${{ inputs.validation-waiver-bootstrap-sha256 }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
@@ -1197,23 +1198,53 @@ jobs:
           fi
           protected_base="$RUNNER_TEMP/protected-known-validation-gaps.yaml"
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
+          # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
             expected_bootstrap="bedeb89a4d0cfce60d9a83a705fa3e15826685e636d71381192e70c2e5cfb1e3"
-            migration_event=false
-            if [ "$GITHUB_REPOSITORY" = "TheAxiomFoundation/rulespec-us" ]; then
-              if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "911" ]; then
-                migration_event=true
-              elif [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && \
-                   [[ "$HEAD_COMMIT_MESSAGE" == "Merge pull request #911 from "* ]]; then
-                migration_event=true
-              fi
-            fi
-            if [ "$migration_event" != true ]; then
-              echo "ValidationWaiverBootstrapUnauthorized: bootstrap is restricted to rulespec-us PR #911 and its merge push" >&2
+            reviewed_anchor="024e129b6fd92f6d8a8555d6be912793e0fb5f02"
+            candidate_ref=""
+            if [ "$GITHUB_REPOSITORY" != "TheAxiomFoundation/rulespec-us" ]; then
+              echo "ValidationWaiverBootstrapUnauthorized: bootstrap is restricted to rulespec-us" >&2
               exit 1
             fi
             if [ "$BOOTSTRAP_SHA256" != "$expected_bootstrap" ]; then
               echo "ValidationWaiverBootstrapHashRejected: unsupported bootstrap hash" >&2
+              exit 1
+            fi
+            if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "911" ]; then
+              candidate_ref="$PR_HEAD_SHA"
+            elif [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && \
+                 [[ "$HEAD_COMMIT_MESSAGE" == "Merge pull request #911 from "* ]]; then
+              read -r merge_commit first_parent topic_parent extra_parent < <(
+                git rev-list --parents -n 1 "$GITHUB_SHA"
+              )
+              if [ -n "${extra_parent:-}" ] || [ -z "${topic_parent:-}" ] || \
+                 [ "$first_parent" != "$base_ref" ]; then
+                echo "ValidationWaiverBootstrapTopology: push must be the two-parent first-parent merge of PR #911" >&2
+                exit 1
+              fi
+              candidate_ref="$topic_parent"
+            else
+              echo "ValidationWaiverBootstrapUnauthorized: event is not rulespec-us PR #911 or its merge push" >&2
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$reviewed_anchor" "$candidate_ref"; then
+              echo "ValidationWaiverBootstrapAnchor: candidate does not descend from the reviewed PR #911 head" >&2
+              exit 1
+            fi
+            unexpected_paths="$(
+              git diff --name-only --no-renames "$reviewed_anchor" "$candidate_ref" -- \
+                ':(exclude).github/workflows/repository-checks.yml' \
+                ':(exclude)tests/test_legacy_rulespec_freeze.py'
+            )"
+            if [ -n "$unexpected_paths" ]; then
+              echo "ValidationWaiverBootstrapDrift: unreviewed paths changed after the PR #911 anchor:" >&2
+              printf '%s\n' "$unexpected_paths" >&2
+              exit 1
+            fi
+            candidate_sha256="$(git show "$candidate_ref:known-validation-gaps.yaml" | sha256sum | cut -d ' ' -f 1)"
+            if [ "$candidate_sha256" != "$BOOTSTRAP_SHA256" ]; then
+              echo "ValidationWaiverBootstrapCandidateMismatch: candidate waiver hash does not match bootstrap" >&2
               exit 1
             fi
             current_sha256="$(sha256sum known-validation-gaps.yaml | cut -d ' ' -f 1)"
@@ -1227,8 +1258,9 @@ jobs:
             git show "$base_ref:known-validation-gaps.yaml" > "$protected_base" || {
               echo "ValidationWaiverBaseMissing: protected base must contain known-validation-gaps.yaml" >&2
               exit 1
-            }
+              }
           fi
+          # waiver-bootstrap-guard-end
           git diff --name-only -z --no-renames --diff-filter=ACMRTD \
             "$base_ref" "$GITHUB_SHA" | LC_ALL=C tr '\0' '\n' > "$changed_paths"
           python - "$protected_base" known-validation-gaps.yaml <<'PY'
