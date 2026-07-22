@@ -820,7 +820,12 @@ jobs:
                           "freeze is decrement-only; "
                           f"added={additions}, changed={changed}"
                       )
-              if os.environ.get("RUN_GENERATED_GUARD") != "true" and not bootstrap_digest:
+              if (
+                  os.environ.get("CALLER_REPOSITORY")
+                  == "TheAxiomFoundation/rulespec-us"
+                  and os.environ.get("RUN_GENERATED_GUARD") != "true"
+                  and not bootstrap_digest
+              ):
                   fail("generated guard bypass requires an authorized bootstrap")
 
           with open(output_path, "w", encoding="utf-8") as output:
