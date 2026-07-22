@@ -4,13 +4,13 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #990 from TheAxiomFoundation/codex/ri-2026-boundary-fixtures | 49 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
-| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-22 — Merge pull request #19 from TheAxiomFoundation/codex/pin-parameter-snapshot-encoder | 1 | ca-rulespec-2026-07-21-oracle-complete-v2 | 029d61ef8ebcc2b781e4712d8fe0c7614e929c7c | success |
+| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-22 — Merge pull request #13 from TheAxiomFoundation/ci/reusable-caller | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #999 from TheAxiomFoundation/chore/corpus-pin-dfa47 | 50 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #25 from TheAxiomFoundation/znz/federation | 9 | tz-rulespec-2026-07-21 | 029d61ef8ebcc2b781e4712d8fe0c7614e929c7c | success |
+| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-22 — Merge pull request #21 from TheAxiomFoundation/axiom/signed-backfill-ca-29914494463-1 | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | 0bf49c919aa1e4b761d3a17452b5379bef9fa2ee | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-21 — ci: make signed-apply open_pr git-add tolerant of absent optional paths (#21) | 12 | de-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
-| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#11) | 1 | et-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#14) | 2 | ug-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#14) | 6 | zm-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
-| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#23) | 10 | tz-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-21 — Re-point container-level proof atoms to text-bearing provisions (#97) (#98) | 5 | nz-rulespec-2026-07-20 | 8edec1c8d6104146899f8a6aa55f314ff900f7e2 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 1 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | success |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-17 — Migrate rulespec-rw to canonical provenance validation (#10) | 0 | rw-rulespec-2026-07-16 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
