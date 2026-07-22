@@ -4,8 +4,8 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #982 from TheAxiomFoundation/codex/nj-2026-pit-promotion | 49 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
-| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-22 — Merge pull request #17 from TheAxiomFoundation/codex/pin-convergent-encoder | 3 | ca-rulespec-2026-07-21-oracle-complete-v2 | 5a5b5e6255a0f941fbd0dd9150f50f980d7c5423 | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #990 from TheAxiomFoundation/codex/ri-2026-boundary-fixtures | 49 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-22 — Merge pull request #19 from TheAxiomFoundation/codex/pin-parameter-snapshot-encoder | 1 | ca-rulespec-2026-07-21-oracle-complete-v2 | 029d61ef8ebcc2b781e4712d8fe0c7614e929c7c | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-21 — ci: make signed-apply open_pr git-add tolerant of absent optional paths (#21) | 12 | de-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#11) | 1 | et-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#14) | 2 | ug-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
