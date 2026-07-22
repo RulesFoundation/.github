@@ -606,6 +606,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REF_NAME: ${{ github.ref }}
           IS_FIRST_SHARD: ${{ matrix.shard == needs.shards.outputs.first }}
+          RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
         run: |
           set -euo pipefail
           python - "$RUNNER_TEMP/retired-schema-skip.txt" <<'PY'
@@ -760,17 +761,41 @@ jobs:
                   if base_raw is not None
                   else {}
               )
+              if base_raw is not None and head_raw is None:
+                  fail("the sealed freeze file cannot be removed")
               bootstrap_digest = os.environ.get("BOOTSTRAP_SHA256", "").strip()
               if bootstrap_digest:
                   authorized_pr = (
                       os.environ["EVENT_NAME"] == "pull_request"
                       and os.environ.get("PR_NUMBER") == "911"
                   )
-                  authorized_push = (
+                  push_candidate = (
                       os.environ["EVENT_NAME"] == "push"
                       and os.environ.get("REF_NAME") == "refs/heads/main"
-                      and "#911" in os.environ.get("HEAD_MESSAGE", "")
+                      and re.fullmatch(
+                          r"Merge pull request #911 from .+",
+                          (
+                              os.environ.get("HEAD_MESSAGE", "").splitlines() or [""]
+                          )[0],
+                      )
+                      is not None
                   )
+                  authorized_push = False
+                  if push_candidate:
+                      commit = git("rev-list", "--parents", "-n", "1", head_ref).stdout
+                      parents = commit.decode("ascii").strip().split()
+                      if len(parents) != 3 or parents[1] != base_ref:
+                          fail("bootstrap push must be the first-parent merge of PR #911")
+                      topic_parent = parents[2]
+                      if git(
+                          "merge-base", "--is-ancestor", topic_parent, base_ref, check=False
+                      ).returncode == 0:
+                          fail("bootstrap topic parent was already merged into the protected base")
+                      topic_raw = immutable_blob(topic_parent, freeze_path)
+                      assert topic_raw is not None
+                      authorized_push = (
+                          hashlib.sha256(topic_raw).hexdigest() == bootstrap_digest
+                      )
                   if (
                       os.environ.get("CALLER_REPOSITORY")
                       != "TheAxiomFoundation/rulespec-us"
@@ -795,6 +820,8 @@ jobs:
                           "freeze is decrement-only; "
                           f"added={additions}, changed={changed}"
                       )
+              if os.environ.get("RUN_GENERATED_GUARD") != "true" and not bootstrap_digest:
+                  fail("generated guard bypass requires an authorized bootstrap")
 
           with open(output_path, "w", encoding="utf-8") as output:
               output.writelines(f"{module}\n" for module in sorted(head))
@@ -953,15 +980,6 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE/_axiom/axiom-corpus" "$GITHUB_WORKSPACE/../axiom-corpus"
           if [ "$(basename "$GITHUB_WORKSPACE")" != "rulespec-us" ]; then
             ln -sfn "$GITHUB_WORKSPACE/_axiom/rulespec-us" "$GITHUB_WORKSPACE/../rulespec-us"
-          fi
-
-      - name: Run repository tests
-        if: ${{ inputs.run-pytest && matrix.shard == needs.shards.outputs.first }}
-        run: |
-          if [ -d tests ] && find tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
-            python -m pytest -q tests
-          else
-            echo "No Python tests found; skipping pytest."
           fi
 
       - name: Reject obsolete generated files
@@ -1806,6 +1824,17 @@ jobs:
 
           print(f"Changed PolicyEngine oracle coverage passed for {len(items)} output(s).")
           PY
+
+      # Repository-controlled tests run only after every trusted validation
+      # consumer has finished with RUNNER_TEMP artifacts.
+      - name: Run repository tests
+        if: ${{ inputs.run-pytest && matrix.shard == needs.shards.outputs.first }}
+        run: |
+          if [ -d tests ] && find tests -type f \( -name "test_*.py" -o -name "*_test.py" \) | grep -q .; then
+            python -m pytest -q tests
+          else
+            echo "No Python tests found; skipping pytest."
+          fi
 
   validate-complete:
     # Matrix jobs get suffixed check names such as `validate (us-ca)`.
