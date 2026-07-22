@@ -181,6 +181,38 @@ def main() -> None:
         )
         assert approved_push.returncode == 0, approved_push.stderr
 
+        (root / "later.txt").write_text("later protected change\n")
+        later_base = commit(root, "later base advance")
+        replay_tree = git(root, "rev-parse", f"{later_base}^{{tree}}")
+        replay = subprocess.run(
+            [
+                "git",
+                "commit-tree",
+                replay_tree,
+                "-p",
+                later_base,
+                "-p",
+                topic,
+            ],
+            cwd=root,
+            check=True,
+            input="Merge pull request #911 from org/topic\n",
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        git(root, "reset", "--hard", replay)
+        replayed_push = run_guard(
+            root,
+            anchor=anchor,
+            digest=digest,
+            event="push",
+            github_sha=replay,
+            github_ref="refs/heads/main",
+            message="Merge pull request #911 from org/topic",
+            base_ref=later_base,
+        )
+        assert replayed_push.returncode != 0
+
         forged_push = run_guard(
             root,
             anchor=anchor,

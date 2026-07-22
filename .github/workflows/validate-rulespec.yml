@@ -1223,6 +1223,19 @@ jobs:
                 echo "ValidationWaiverBootstrapTopology: push must be the two-parent first-parent merge of PR #911" >&2
                 exit 1
               fi
+              if git merge-base --is-ancestor "$topic_parent" "$first_parent"; then
+                echo "ValidationWaiverBootstrapReplay: topic parent is already contained in the protected base" >&2
+                exit 1
+              fi
+              expected_tree="$(git merge-tree --write-tree "$first_parent" "$topic_parent")" || {
+                echo "ValidationWaiverBootstrapMergeConflict: PR #911 must merge without manual conflict resolution" >&2
+                exit 1
+              }
+              actual_tree="$(git rev-parse "$GITHUB_SHA^{tree}")"
+              if [ "$actual_tree" != "$expected_tree" ]; then
+                echo "ValidationWaiverBootstrapMergeTree: merge tree differs from the reviewed topic merged into the protected base" >&2
+                exit 1
+              fi
               candidate_ref="$topic_parent"
             else
               echo "ValidationWaiverBootstrapUnauthorized: event is not rulespec-us PR #911 or its merge push" >&2
