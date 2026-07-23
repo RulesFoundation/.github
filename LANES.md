@@ -4,20 +4,20 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
+| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-23 — Merge pull request #99 from TheAxiomFoundation/ci/keyring-validate-pins | 5 | nz-rulespec-2026-07-20 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #14 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-23 — Merge pull request #13 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ng-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-23 — Merge pull request #117 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-22 — Merge pull request #17 from TheAxiomFoundation/ci/reusable-caller-keyring | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-22 — Merge pull request #23 from TheAxiomFoundation/ci/reusable-caller-keyring | 12 | de-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-22 — Merge pull request #21 from TheAxiomFoundation/ci/reusable-caller-keyring | 6 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-22 — Merge pull request #13 from TheAxiomFoundation/ci/reusable-caller | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #999 from TheAxiomFoundation/chore/corpus-pin-dfa47 | 50 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
-| [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #25 from TheAxiomFoundation/znz/federation | 9 | tz-rulespec-2026-07-21 | 029d61ef8ebcc2b781e4712d8fe0c7614e929c7c | success |
-| [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-22 — Merge pull request #21 from TheAxiomFoundation/axiom/signed-backfill-ca-29914494463-1 | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | 0bf49c919aa1e4b761d3a17452b5379bef9fa2ee | success |
-| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-21 — ci: make signed-apply open_pr git-add tolerant of absent optional paths (#21) | 12 | de-rulespec-2026-07-16 | 164abed93f6df7f4bc52af533a9989159ec58113 | success |
-| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#14) | 2 | ug-rulespec-2026-07-12 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
-| [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-21 — ci: bump signed-apply encoder ref to aff8d708 (#1199 apply-path fix) (#14) | 6 | zm-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
-| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-21 — Re-point container-level proof atoms to text-bearing provisions (#97) (#98) | 5 | nz-rulespec-2026-07-20 | 8edec1c8d6104146899f8a6aa55f314ff900f7e2 | success |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 1 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | success |
-| [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-17 — Migrate rulespec-rw to canonical provenance validation (#10) | 0 | rw-rulespec-2026-07-16 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
-| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-13 — Migrate Belgium to canonical provenance validation (#115) | 0 | be-rulespec-2026-07-10 | 185b2457c16df11bf328fd6257a5b7fbe3fe7534 | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #999 from TheAxiomFoundation/chore/corpus-pin-dfa47 | 51 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 2 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | success |
 | [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-07-12 — Migrate to the canonical signed corpus release (gh-rulespec-2026-07-10) (#30) | 1 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
-| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-12 — Migrate to the canonical signed corpus release (dk-rulespec-2026-07-12) (#8) | 0 | dk-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
-| [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-12 — Migrate to the canonical signed corpus release (ng-rulespec-2026-07-10) (#10) | 0 | ng-rulespec-2026-07-10 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
 
 <!-- curated:start -->
 ## Lane ownership and standing constraints (curated — edit by PR only)
