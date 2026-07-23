@@ -15,7 +15,7 @@
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-22 — Merge pull request #21 from TheAxiomFoundation/ci/reusable-caller-keyring | 6 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-22 — Merge pull request #13 from TheAxiomFoundation/ci/reusable-caller | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #999 from TheAxiomFoundation/chore/corpus-pin-dfa47 | 51 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-22 — Merge pull request #999 from TheAxiomFoundation/chore/corpus-pin-dfa47 | 54 | — | 3869d66d009f52258be35901edbef370e65a399c | queued |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 2 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | success |
 | [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-07-12 — Migrate to the canonical signed corpus release (gh-rulespec-2026-07-10) (#30) | 1 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
 
