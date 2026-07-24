@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/validate-rulespec.yml"
 EXPECTED_HASH = "396e188da03b212c978b8b7bc222af6e5ee9fd26b32d942b64e92aaf73f8b748"
-EXPECTED_ANCHOR = "b7cea0e625460f5170d6b4835283994dece963d8"
+EXPECTED_ANCHOR = "ae6998b49ef446ceae3e8d833375170affa32d2b"
 
 
 def git(root: Path, *args: str) -> str:
