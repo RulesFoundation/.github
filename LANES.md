@@ -28,12 +28,21 @@ Verbal/relayed "nobody's on this" goes stale in hours; tracker claims don't. (Ad
 the encoder-identity collision, 2026-07-18.)
 
 - **us** — owners: @MaxGhenis (strict-cutover / bind rulespec-us#911) + @PavelMakarchuk (encode waves).
-  Landmines: ~30-PR review queue; release binding pending (see `ops/strict-cutover/founding-brief.md`).
-- **uk** — CTR campaign. Landmine: [corpus#366](https://github.com/TheAxiomFoundation/axiom-corpus/issues/366)
-  22-key re-versioning REQUIRED before the next uk release cut.
-- **nz** — district-plan expansion; self-cut `nz-rulespec-2026-07-18`.
-- **tz / de** — Path R signed-apply batch. Gate: tier-2 signer custody (@MaxGhenis).
-- **ca** — DORMANT: migration prepared, no release; queued behind the us strict cutover.
+  Landmines: large encode-wave review queue (live count in the table); release binding pending
+  (see `ops/strict-cutover/founding-brief.md`).
+- **uk** — CTR campaign + 296-council expansion. The
+  [corpus#366](https://github.com/TheAxiomFoundation/axiom-corpus/issues/366) 22-key
+  re-versioning is RESOLVED (2026-07-22: keys renamed `-r2026-07-20-datefix` via corpus#477;
+  `uk-rulespec-2026-07-22` published). Gate: the 07-22 rebind
+  [rulespec-uk#162](https://github.com/TheAxiomFoundation/rulespec-uk/pull/162), held for Max.
+- **nz** — district-plan expansion; self-cuts its own releases (latest pin in the table).
+- **tz / de** — Path R signed-apply batch: CI legs deployed (tz#14 / de#14 merged 2026-07-17,
+  de#21 workflow fix 2026-07-21). Gates:
+  [corpus#441](https://github.com/TheAxiomFoundation/axiom-corpus/issues/441) release-mirror
+  credential (Max) — blocks the de repin rulespec-de#22 — and Max's GO on the billed
+  signed-apply dispatch.
+- **ca** — no longer dormant: migration landed, bound to
+  `ca-rulespec-2026-07-21-oracle-complete-v2` (self-cut 2026-07-21).
 - **dk / be / ng / gh / ug / zm / et / rw** — stable post-migration.
 - **Org-wide**: coordination + billing directive on
   [.github#39](https://github.com/TheAxiomFoundation/.github/issues/39); migration runbook at
