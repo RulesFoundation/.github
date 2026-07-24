@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-23 — Merge pull request #1020 from TheAxiomFoundation/encode/hi-stale-oracle-pending-drain | 56 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1031 from TheAxiomFoundation/encode/mt-2026-e2e-resident | 57 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/repair/lane-modules | 4 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-23 — Merge pull request #18 from TheAxiomFoundation/repair/nssf-s11-s12 | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
