@@ -19,12 +19,13 @@ on:
       oracle-coverage-axiom-encode-ref:
         description: >-
           Git ref for TheAxiomFoundation/axiom-encode used by PolicyEngine
-          oracle coverage classification. This intentionally defaults to main
-          so new oracle mappings can unblock generated RuleSpec PRs without
-          forcing a full validation toolchain bump.
+          oracle coverage classification. This intentionally defaults to the
+          reviewed encoder commit carrying the current oracle pin so new
+          mappings can unblock generated RuleSpec PRs without replacing the
+          legacy validation CLI or forcing a full toolchain bump.
         required: false
         type: string
-        default: main
+        default: dc8feca0d1c15c98ccf817b7dba2b80a39f26e38
       axiom-rules-engine-ref:
         description: Git ref for TheAxiomFoundation/axiom-rules-engine.
         required: false
@@ -2466,35 +2467,68 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install -e _axiom/axiom-encode-oracle-coverage
-          # The changed-file classifier checkout (oracle-coverage-axiom-encode-ref,
-          # default main) may pin a newer axiom-oracles commit than the toolchain
-          # step installed. axiom-oracles is a git dependency whose version string
-          # does not change per commit, so pip treats the pinned SHA as "already
-          # satisfied" and keeps the stale copy — the classifier then reports
-          # freshly-added not_comparable mappings as unmapped. Force-reinstall the
-          # axiom-oracles pin declared by this checkout so the classifier reads its
-          # bridge mappings, not the toolchain-pinned ones.
+          # Keep the legacy validation CLI and its parent-directory RuleSpec
+          # layout. Only refresh the axiom-oracles dependency declared by the
+          # reviewed coverage encoder checkout. Installing that encoder itself
+          # would replace the legacy CLI with the canonical-root/toolchain hard
+          # cut and make this compatibility workflow unusable.
           oracles_spec="$(
             python - <<'PY'
           import pathlib
           import re
+          import sys
+          import tomllib
 
-          text = pathlib.Path("_axiom/axiom-encode-oracle-coverage/pyproject.toml").read_text()
-          match = re.search(
-              r'"(axiom-oracles @ git\+https://github\.com/[^"]+)"', text
+          payload = tomllib.loads(pathlib.Path(
+              "_axiom/axiom-encode-oracle-coverage/pyproject.toml"
+          ).read_text())
+          dependencies = payload.get("project", {}).get("dependencies", [])
+
+          def canonical_dependency_name(dependency):
+              if not isinstance(dependency, str):
+                  return None
+              match = re.match(
+                  r"^([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)"
+                  r"(?=$|\s|@|[<>=!~;(\[])",
+                  dependency.strip(),
+              )
+              if match is None:
+                  return None
+              return re.sub(r"[-_.]+", "-", match.group(1)).lower()
+
+          oracle_dependencies = [
+              dependency
+              for dependency in dependencies
+              if canonical_dependency_name(dependency) == "axiom-oracles"
+          ]
+          if len(oracle_dependencies) != 1:
+              print(
+                  "Current oracle-coverage classifier must declare exactly one "
+                  "axiom-oracles dependency.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          match = re.fullmatch(
+              r"axiom-oracles @ git\+https://github\.com/"
+              r"TheAxiomFoundation/axiom-oracles@[0-9a-f]{40}",
+              oracle_dependencies[0].strip(),
           )
-          print(match.group(1) if match else "")
+          if match is None:
+              print(
+                  "Current oracle-coverage classifier must pin axiom-oracles "
+                  "to an exact TheAxiomFoundation commit.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          print(match.group(0))
           PY
           )"
-          if [ -n "$oracles_spec" ]; then
-            python -m pip install --force-reinstall --no-deps "$oracles_spec"
-          fi
+          python -m pip install --force-reinstall --no-deps "$oracles_spec"
           python - <<'PY'
           import importlib.metadata
 
           print(
-              "Changed-file oracle coverage classifier uses axiom-encode "
+              "Changed-file oracle coverage retains legacy axiom-encode "
               f"{importlib.metadata.version('axiom-encode')}."
           )
           PY
@@ -2540,6 +2574,13 @@ jobs:
               item for item in payload.get("items", [])
               if item.get("file") in changed
           ]
+          if not items:
+              print(
+                  "Changed PolicyEngine oracle coverage matched zero executable "
+                  "outputs; refusing a vacuous pass.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
           failures = []
           for item in items:
               legal_id = item.get("legal_id")
