@@ -4,10 +4,12 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1031 from TheAxiomFoundation/encode/mt-2026-e2e-resident | 57 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1040 from TheAxiomFoundation/encode/ca-2026-e2e-resident | 59 | — | 3869d66d009f52258be35901edbef370e65a399c | queued |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-24 — Rebind to uk-rulespec-2026-07-22 (datefix + council scopes — HELD for Max) (#162) | 1 | uk-rulespec-2026-07-22 | c326d1ac0acdb557f047a3054160b19dd72602fa | in_progress |
+| [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 0 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
+| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 1 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/repair/lane-modules | 4 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-23 — Merge pull request #18 from TheAxiomFoundation/repair/nssf-s11-s12 | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-23 — Merge pull request #99 from TheAxiomFoundation/ci/keyring-validate-pins | 5 | nz-rulespec-2026-07-20 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-23 — Merge pull request #13 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ng-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
@@ -15,8 +17,6 @@
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-22 — Merge pull request #23 from TheAxiomFoundation/ci/reusable-caller-keyring | 12 | de-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-22 — Merge pull request #13 from TheAxiomFoundation/ci/reusable-caller | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-19 — Encode the CTR hard ledger: 23 steered sections across all four GB instruments (#160) | 2 | uk-rulespec-2026-07-14 | cdadbb6535f2dcccc5ca901e772726033e02b551 | failure |
 | [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-07-12 — Migrate to the canonical signed corpus release (gh-rulespec-2026-07-10) (#30) | 1 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
 
 <!-- curated:start -->
