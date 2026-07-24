@@ -60,6 +60,9 @@ def run_filter(
     source: str,
     *,
     items: str,
+    changed_paths: tuple[str, ...] = (
+        "us-in/policies/income_tax/2026_resident_liability_source_hold.yaml",
+    ),
 ) -> tuple[int, str, str]:
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
@@ -68,9 +71,7 @@ def run_filter(
         coverage = root / "coverage.json"
         coverage.write_text(f'{{"items": {items}}}')
         changed = root / "changed.txt"
-        changed.write_text(
-            "us-in/policies/income_tax/2026_resident_liability_source_hold.yaml\n"
-        )
+        changed.write_text("".join(f"{path}\n" for path in changed_paths))
         stdout = io.StringIO()
         stderr = io.StringIO()
         previous_argv = sys.argv
@@ -140,6 +141,14 @@ def main() -> None:
     assert status == 0, stderr
     assert "passed for 1 output(s)" in stdout
 
+    untested_comparable = (
+        f'[{{"file": "{target_file}", "legal_id": "us-in:target#value", '
+        '"status": "comparable", "tested": false}]'
+    )
+    status, _, stderr = run_filter(filter_source, items=untested_comparable)
+    assert status == 1
+    assert "comparable but not covered by companion tests" in stderr
+
     unmapped = (
         f'[{{"file": "{target_file}", "legal_id": "us-in:target#value", '
         '"status": "unmapped", "tested": true}]'
@@ -148,9 +157,43 @@ def main() -> None:
     assert status == 1
     assert "us-in:target#value: unmapped" in stderr
 
+    for rejected_status, message in (
+        ("pending_classification", "pending classification"),
+        ("incomplete_comparable", "incomplete comparable mapping"),
+        ("bogus", "unsupported coverage status"),
+    ):
+        items = (
+            f'[{{"file": "{target_file}", "legal_id": "us-in:target#value", '
+            f'"status": "{rejected_status}", "tested": true}}]'
+        )
+        status, _, stderr = run_filter(filter_source, items=items)
+        assert status == 1
+        assert message in stderr
+
     status, _, stderr = run_filter(filter_source, items="[]")
     assert status == 1
-    assert "matched zero executable outputs" in stderr
+    assert "no executable output for changed RuleSpec file(s)" in stderr
+
+    unprefixed = (
+        '[{"file": "us-in/policies/income_tax/'
+        '2026_resident_liability_source_hold.yaml", '
+        '"legal_id": "us-in:target#value", '
+        '"status": "known_not_comparable", "tested": true}]'
+    )
+    status, _, stderr = run_filter(filter_source, items=unprefixed)
+    assert status == 1
+    assert target_file in stderr
+
+    status, _, stderr = run_filter(
+        filter_source,
+        items=comparable,
+        changed_paths=(
+            "us-in/policies/income_tax/2026_resident_liability_source_hold.yaml",
+            "us-ks/policies/income_tax/2026_full_year_resident_core.yaml",
+        ),
+    )
+    assert status == 1
+    assert "rulespec-us/us-ks/policies/income_tax/" in stderr
 
     print("legacy oracle coverage overlay: ok")
 

@@ -2574,20 +2574,42 @@ jobs:
               item for item in payload.get("items", [])
               if item.get("file") in changed
           ]
-          if not items:
+          represented = {
+              item.get("file")
+              for item in items
+              if isinstance(item.get("file"), str)
+          }
+          missing = sorted(changed - represented)
+          if missing:
               print(
-                  "Changed PolicyEngine oracle coverage matched zero executable "
-                  "outputs; refusing a vacuous pass.",
+                  "Changed PolicyEngine oracle coverage has no executable "
+                  "output for changed RuleSpec file(s):",
                   file=sys.stderr,
               )
+              for path in missing:
+                  print(f"- {path}", file=sys.stderr)
               sys.exit(1)
           failures = []
           for item in items:
               legal_id = item.get("legal_id")
-              if item.get("status") == "unmapped":
+              status = item.get("status")
+              if status == "known_not_comparable":
+                  continue
+              if status == "comparable":
+                  if not item.get("tested"):
+                      failures.append(
+                          f"{legal_id}: comparable but not covered by companion tests"
+                      )
+              elif status == "unmapped":
                   failures.append(f"{legal_id}: unmapped")
-              elif item.get("status") == "comparable" and not item.get("tested"):
-                  failures.append(f"{legal_id}: comparable but not covered by companion tests")
+              elif status == "pending_classification":
+                  failures.append(f"{legal_id}: pending classification")
+              elif status == "incomplete_comparable":
+                  failures.append(f"{legal_id}: incomplete comparable mapping")
+              else:
+                  failures.append(
+                      f"{legal_id}: unsupported coverage status {status!r}"
+                  )
 
           if failures:
               print("Changed PolicyEngine oracle coverage is incomplete.", file=sys.stderr)
