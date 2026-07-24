@@ -1202,8 +1202,8 @@ jobs:
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
           # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
-            expected_bootstrap="bedeb89a4d0cfce60d9a83a705fa3e15826685e636d71381192e70c2e5cfb1e3"
-            reviewed_anchor="024e129b6fd92f6d8a8555d6be912793e0fb5f02"
+            expected_bootstrap="396e188da03b212c978b8b7bc222af6e5ee9fd26b32d942b64e92aaf73f8b748"
+            reviewed_anchor="b4ded205d888390f20109a5bce9738c85246c0b0"
             candidate_ref=""
             if [ "$GITHUB_REPOSITORY" != "TheAxiomFoundation/rulespec-us" ]; then
               echo "ValidationWaiverBootstrapUnauthorized: bootstrap is restricted to rulespec-us" >&2
