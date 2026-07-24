@@ -4,15 +4,15 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #93 from TheAxiomFoundation/encode/nz-youth-young-parent-payment | 3 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | in_progress |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1046 from TheAxiomFoundation/encode/ar-2026-e2e-resident | 56 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-24 — Encode Merton and Newham via the restates-skeleton generator (2886 derivatives) (#164) | 0 | uk-rulespec-2026-07-22 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1061 from TheAxiomFoundation/encode/ak-2026-e2e-resident | 57 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-24 — Merge pull request #14 from TheAxiomFoundation/toolchain/repin-ng-rulespec-2026-07-22 | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 2 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-24 — Encode Merton and Newham via the restates-skeleton generator (2886 derivatives) (#164) | 1 | uk-rulespec-2026-07-22 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 0 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 1 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-23 — Merge pull request #13 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ng-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-23 — Merge pull request #117 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-22 — Merge pull request #23 from TheAxiomFoundation/ci/reusable-caller-keyring | 12 | de-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
