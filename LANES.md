@@ -4,10 +4,10 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-24 — Merge pull request #1061 from TheAxiomFoundation/encode/ak-2026-e2e-resident | 57 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-25 — Merge pull request #1084 from TheAxiomFoundation/chore/pin-kentucky-idaho-massachusetts-oracle-workflow-2026 | 57 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-24 — Rebind to uk-rulespec-2026-07-24 (tranche-2 council scopes) (#165) | 1 | uk-rulespec-2026-07-24 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-24 — Merge pull request #14 from TheAxiomFoundation/toolchain/repin-ng-rulespec-2026-07-22 | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 2 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-24 — Encode Merton and Newham via the restates-skeleton generator (2886 derivatives) (#164) | 1 | uk-rulespec-2026-07-22 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 0 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 1 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
