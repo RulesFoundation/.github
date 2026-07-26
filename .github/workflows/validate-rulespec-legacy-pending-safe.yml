@@ -326,6 +326,7 @@ jobs:
           set -euo pipefail
           python - <<'PY'
           import os
+          import re
           import subprocess
           from pathlib import Path
 
@@ -401,7 +402,84 @@ jobs:
                   return False
               return bool(head_failures)
 
-          if approval_growth(base, head) and changed != [waiver_path]:
+          def is_atomic_bridge_pin_refresh():
+              if len(changed) != 2 or waiver_path not in changed:
+                  return False
+              workflow_paths = [
+                  path
+                  for path in changed
+                  if re.fullmatch(
+                      r"\.github/workflows/[^/]+\.(?:yml|yaml)",
+                      path,
+                  )
+              ]
+              if len(workflow_paths) != 1:
+                  return False
+              workflow_path = workflow_paths[0]
+              if set(changed) != {waiver_path, workflow_path}:
+                  return False
+
+              result = subprocess.run(
+                  ["git", "show", f"{base_ref}:{workflow_path}"],
+                  check=False,
+                  stdout=subprocess.PIPE,
+                  stderr=subprocess.DEVNULL,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  return False
+              before = result.stdout.splitlines(keepends=True)
+              after = Path(workflow_path).read_text().splitlines(keepends=True)
+              permission_block = [
+                  "permissions:\n",
+                  "  actions: read\n",
+                  "  contents: read\n",
+                  "\n",
+              ]
+              block_starts = [
+                  index
+                  for index in range(len(after) - len(permission_block))
+                  if after[index : index + len(permission_block)] == permission_block
+                  and after[index + len(permission_block)].rstrip("\r\n") == "jobs:"
+              ]
+              if len(after) == len(before) + len(permission_block):
+                  if len(block_starts) != 1:
+                      return False
+                  start = block_starts[0]
+                  after = after[:start] + after[start + len(permission_block) :]
+
+              changed_lines = [
+                  index
+                  for index, pair in enumerate(zip(before, after, strict=False))
+                  if pair[0] != pair[1]
+              ]
+              if len(before) != len(after) or len(changed_lines) != 1:
+                  return False
+              old_line = before[changed_lines[0]].rstrip("\r\n")
+              new_line = after[changed_lines[0]].rstrip("\r\n")
+              old = re.fullmatch(
+                  r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
+                  r"workflows/(?:validate-rulespec|validate-rulespec-legacy-pending-safe)"
+                  r"\.yml@[0-9a-f]{40}(?:\s+#.*)?",
+                  old_line,
+              )
+              new = re.fullmatch(
+                  r"(?P<indent>\s*)uses:\s*TheAxiomFoundation/\.github/\.github/"
+                  r"workflows/validate-rulespec-legacy-pending-safe\.yml@"
+                  r"[0-9a-f]{40}(?:\s+#.*)?",
+                  new_line,
+              )
+              return (
+                  old is not None
+                  and new is not None
+                  and old["indent"] == new["indent"]
+              )
+
+          if (
+              approval_growth(base, head)
+              and changed != [waiver_path]
+              and not is_atomic_bridge_pin_refresh()
+          ):
               raise SystemExit(
                   "new or changed validation waiver approvals must be waiver-only"
               )
