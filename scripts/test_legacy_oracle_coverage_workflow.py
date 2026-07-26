@@ -97,6 +97,22 @@ def main() -> None:
     workflow = WORKFLOW.read_text()
     assert f"default: {ENCODER_REF}" in workflow
 
+    target_selection = step_source(
+        workflow,
+        "Select RuleSpec validation targets",
+        "Validate RuleSpec YAML",
+    )
+    assert "is_bridge_pin_with_optional_waiver_only()" in target_selection
+    assert (
+        "&& ! is_bridge_pin_with_optional_waiver_only"
+        in target_selection
+    )
+    assert (
+        'if [ "$waiver_changed" = "true" ]; then\n'
+        '                      mode="full-waiver-migration"'
+        in target_selection
+    )
+
     install = step_source(
         workflow,
         "Install changed-file oracle coverage classifier",
