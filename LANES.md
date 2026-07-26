@@ -4,9 +4,9 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-26 — Merge pull request #1088 from TheAxiomFoundation/evidence/waiver-fingerprints-1373-main | 61 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-26 — Merge pull request #24 from TheAxiomFoundation/ci/complete-mode-caller | 11 | de-rulespec-2026-07-21 | 034d1acb39ae9c9cb7208bfb8532433e7eed7ceb | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-26 — Merge pull request #1091 from TheAxiomFoundation/encode/mi-2026-truthfulness-followup | 56 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-25 — Encode Coventry's working-age banded CTR scheme (re-encode) (#168) | 0 | uk-rulespec-2026-07-24 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
-| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-25 — Merge pull request #22 from TheAxiomFoundation/toolchain/repin-de-rulespec-2026-07-21 | 11 | de-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-24 — Merge pull request #14 from TheAxiomFoundation/toolchain/repin-ng-rulespec-2026-07-22 | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 5 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
