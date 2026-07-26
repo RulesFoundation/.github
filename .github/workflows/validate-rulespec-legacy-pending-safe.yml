@@ -2628,7 +2628,7 @@ jobs:
           PY
 
       - name: Validate changed PolicyEngine oracle coverage classification
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' && steps.validation_targets.outputs.mode != 'full-waiver-migration' }}
         shell: bash
         run: |
           set -euo pipefail
