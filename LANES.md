@@ -4,11 +4,11 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-26 — Merge pull request #1119 from TheAxiomFoundation/chore/pin-alabama-oracle-coverage-workflow-20260726 | 59 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-26 — Encode North Yorkshire working-age CTR scheme (wave 4) (#174) | 0 | uk-rulespec-2026-07-26 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
+| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-26 — Merge pull request #102 from TheAxiomFoundation/fix/pie-prescribed-investor-rates | 2 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-26 — Merge pull request #29 from TheAxiomFoundation/signed/de-regulation-svbezgrv-2025-2 | 11 | de-rulespec-2026-07-21 | d8d4f1bf211b7640120e88a1055bc67c68134109 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-26 — Add Utah 2026 resident before-credit schedule (#1107) | 59 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-25 — Encode Coventry's working-age banded CTR scheme (re-encode) (#168) | 1 | uk-rulespec-2026-07-24 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-24 — Merge pull request #14 from TheAxiomFoundation/toolchain/repin-ng-rulespec-2026-07-22 | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 5 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
