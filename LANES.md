@@ -4,20 +4,20 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-26 — Merge pull request #1088 from TheAxiomFoundation/evidence/waiver-fingerprints-1373-main | 61 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-25 — Encode Coventry's working-age banded CTR scheme (re-encode) (#168) | 0 | uk-rulespec-2026-07-24 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-25 — Merge pull request #22 from TheAxiomFoundation/toolchain/repin-de-rulespec-2026-07-21 | 11 | de-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-25 — Merge pull request #1004 from TheAxiomFoundation/fed-parity/credits | 55 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-07-24 — Merge pull request #14 from TheAxiomFoundation/toolchain/repin-ng-rulespec-2026-07-22 | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 3 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
+| [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-24 — Merge pull request #94 from TheAxiomFoundation/encode/nz-familyboost-tax-credit | 5 | nz-rulespec-2026-07-20 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 0 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
-| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 1 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
+| [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/signed/ug-statute-act-2022-11-income-tax-amendment-2022-section-22-rental-deductions-amended | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-23 — Merge pull request #117 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 1 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-07-12 — Migrate to the canonical signed corpus release (gh-rulespec-2026-07-10) (#30) | 1 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
+| [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-07-12 — Migrate to the canonical signed corpus release (gh-rulespec-2026-07-10) (#30) | 2 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | success |
 
 <!-- curated:start -->
 ## Lane ownership and standing constraints (curated — edit by PR only)
