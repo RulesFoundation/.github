@@ -93,9 +93,105 @@ def run_filter(
         return status, stdout.getvalue(), stderr.getvalue()
 
 
+def run_approval_growth_guard(
+    source: str,
+    *,
+    semantic_pin: bool = True,
+    extra_path: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory() as temp:
+        root = Path(temp)
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
+        subprocess.run(
+            ["git", "config", "user.email", "workflow-test@example.com"],
+            cwd=root,
+            check=True,
+        )
+        subprocess.run(
+            ["git", "config", "user.name", "Workflow Test"],
+            cwd=root,
+            check=True,
+        )
+        waiver = root / "known-validation-gaps.yaml"
+        waiver.write_text(
+            "validate_failures:\n"
+            '  "us-test/module.yaml":\n'
+            "    active:\n"
+            '      fingerprint: "sha256:'
+            + "1" * 64
+            + '"\n'
+        )
+        workflow = root / ".github/workflows/repository-checks.yml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(
+            "jobs:\n"
+            "  validate:\n"
+            "    uses: TheAxiomFoundation/.github/.github/workflows/"
+            "validate-rulespec-legacy-pending-safe.yml@"
+            + "2" * 40
+            + "\n"
+        )
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=root, check=True)
+        base = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        waiver.write_text(
+            waiver.read_text()
+            + "    pending:\n"
+            + '      fingerprint: "sha256:'
+            + "3" * 64
+            + '"\n'
+        )
+        if semantic_pin:
+            workflow.write_text(workflow.read_text().replace("2" * 40, "4" * 40))
+        else:
+            workflow.write_text(workflow.read_text().replace("jobs:", "name: drift\njobs:"))
+        if extra_path:
+            (root / "unexpected.txt").write_text("drift\n")
+        subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+        subprocess.run(["git", "commit", "-qm", "head"], cwd=root, check=True)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        return subprocess.run(
+            [sys.executable, "-c", source],
+            cwd=root,
+            env={
+                **os.environ,
+                "PR_BASE_SHA": base,
+                "GITHUB_SHA": head,
+            },
+            capture_output=True,
+            text=True,
+        )
+
+
 def main() -> None:
     workflow = WORKFLOW.read_text()
     assert f"default: {ENCODER_REF}" in workflow
+
+    approval_guard = step_source(
+        workflow,
+        "Require approval growth to be waiver-only",
+        "Report non-pull-request event",
+    )
+    approval_source = heredoc_source(approval_guard, "          python - <<'PY'")
+    atomic = run_approval_growth_guard(approval_source)
+    assert atomic.returncode == 0, atomic.stderr
+    extra = run_approval_growth_guard(approval_source, extra_path=True)
+    assert extra.returncode != 0
+    non_pin = run_approval_growth_guard(approval_source, semantic_pin=False)
+    assert non_pin.returncode != 0
 
     target_selection = step_source(
         workflow,
