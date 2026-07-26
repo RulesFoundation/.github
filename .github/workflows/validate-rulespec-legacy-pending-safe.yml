@@ -1125,15 +1125,25 @@ jobs:
           PY
           }
 
-          is_bridge_pin_only() {
-            if [ "${#all_changed_paths[@]}" -ne 1 ]; then
+          is_bridge_pin_with_optional_waiver_only() {
+            local workflow_path=""
+            local path
+            for path in "${all_changed_paths[@]}"; do
+              case "$path" in
+                known-validation-gaps.yaml) ;;
+                .github/workflows/*.yml|.github/workflows/*.yaml)
+                  if [ -n "$workflow_path" ]; then
+                    return 1
+                  fi
+                  workflow_path="$path"
+                  ;;
+                *) return 1 ;;
+              esac
+            done
+            if [ -z "$workflow_path" ]; then
               return 1
             fi
-            local path="${all_changed_paths[0]}"
-            case "$path" in
-              .github/workflows/*.yml|.github/workflows/*.yaml) ;;
-              *) return 1 ;;
-            esac
+            path="$workflow_path"
             python - "$base_ref" "$path" <<'PY'
           import re
           import subprocess
@@ -1223,7 +1233,9 @@ jobs:
                   ;;
               esac
             done
-            if [ "$waiver_changed" = "true" ] && [ "$trust_inputs_changed" = "true" ]; then
+            if [ "$waiver_changed" = "true" ] \
+              && [ "$trust_inputs_changed" = "true" ] \
+              && ! is_bridge_pin_with_optional_waiver_only; then
               echo "known-validation-gaps.yaml must change separately from toolchain or caller workflows" >&2
               exit 1
             fi
@@ -1231,8 +1243,12 @@ jobs:
             for path in "${all_changed_paths[@]}"; do
               case "$path" in
                 .github/workflows/*.yml|.github/workflows/*.yaml)
-                  if is_bridge_pin_only; then
-                    mode="changed"
+                  if is_bridge_pin_with_optional_waiver_only; then
+                    if [ "$waiver_changed" = "true" ]; then
+                      mode="full-waiver-migration"
+                    else
+                      mode="changed"
+                    fi
                   else
                     mode="full-toolchain-bump"
                   fi
