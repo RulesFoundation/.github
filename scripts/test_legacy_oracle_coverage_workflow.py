@@ -209,6 +209,18 @@ def main() -> None:
         in target_selection
     )
 
+    changed_coverage_start = workflow.index(
+        "      - name: Checkout changed-file oracle coverage classifier"
+    )
+    changed_coverage_end = workflow.index(
+        "\n  validate-complete:",
+        changed_coverage_start,
+    )
+    changed_coverage = workflow[changed_coverage_start:changed_coverage_end]
+    assert changed_coverage.count(
+        "steps.validation_targets.outputs.mode != 'full-waiver-migration'"
+    ) == 3
+
     install = step_source(
         workflow,
         "Install changed-file oracle coverage classifier",
