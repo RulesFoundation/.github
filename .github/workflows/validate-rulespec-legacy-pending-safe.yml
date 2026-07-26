@@ -2378,7 +2378,7 @@ jobs:
       # current encoder would replace the legacy CLI and break its
       # parent-directory checkout layout.
       - name: Checkout full-coverage oracle mappings
-        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' || steps.validation_targets.outputs.mode == 'full-waiver-migration' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-encode
@@ -2386,7 +2386,7 @@ jobs:
           path: _axiom/axiom-encode-oracle-coverage-full
 
       - name: Install full-coverage oracle mappings
-        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' || steps.validation_targets.outputs.mode == 'full-waiver-migration' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -2444,7 +2444,7 @@ jobs:
           python -m pip install --force-reinstall --no-deps "$oracles_spec"
 
       - name: Validate PolicyEngine oracle coverage classification
-        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' }}
+        if: ${{ github.event_name != 'pull_request' || steps.validation_targets.outputs.mode == 'full-toolchain-bump' || steps.validation_targets.outputs.mode == 'full-oracle-coverage' || steps.validation_targets.outputs.mode == 'full-waiver-migration' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -2455,7 +2455,7 @@ jobs:
             --limit 50
 
       - name: Checkout changed-file oracle coverage classifier
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' && steps.validation_targets.outputs.mode != 'full-waiver-migration' }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-encode
@@ -2463,7 +2463,7 @@ jobs:
           path: _axiom/axiom-encode-oracle-coverage
 
       - name: Install changed-file oracle coverage classifier
-        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' }}
+        if: ${{ github.event_name == 'pull_request' && steps.validation_targets.outputs.mode != 'full-toolchain-bump' && steps.validation_targets.outputs.mode != 'full-oracle-coverage' && steps.validation_targets.outputs.mode != 'full-waiver-migration' }}
         shell: bash
         run: |
           set -euo pipefail
