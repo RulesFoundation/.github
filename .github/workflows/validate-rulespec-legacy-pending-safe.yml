@@ -25,7 +25,7 @@ on:
           legacy validation CLI or forcing a full toolchain bump.
         required: false
         type: string
-        default: 589e2b10091b8573164ff75d8bbd01960ecfc8f0
+        default: f6bd0baef34bb34104733a25170c0ac8e7ed62d9
       axiom-rules-engine-ref:
         description: Git ref for TheAxiomFoundation/axiom-rules-engine.
         required: false

@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/validate-rulespec-legacy-pending-safe.yml"
-ENCODER_REF = "589e2b10091b8573164ff75d8bbd01960ecfc8f0"
+ENCODER_REF = "f6bd0baef34bb34104733a25170c0ac8e7ed62d9"
 ORACLE_REF = "eeca677b4bbce143fb0a109e4b63bcce59453e3d"
 ORACLE_SPEC = (
     "axiom-oracles @ git+https://github.com/"
