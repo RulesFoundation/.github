@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-28 — Merge pull request #1175 from TheAxiomFoundation/pin/corpus-8af592162 | 72 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-07-29 — Merge pull request #1174 from TheAxiomFoundation/fed-parity/atomic-63c6-67h | 72 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-07-26 — Encode North Yorkshire working-age CTR scheme (wave 4) (#174) | 0 | uk-rulespec-2026-07-26 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-07-26 — Merge pull request #102 from TheAxiomFoundation/fix/pie-prescribed-investor-rates | 2 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-07-26 — Merge pull request #29 from TheAxiomFoundation/signed/de-regulation-svbezgrv-2025-2 | 11 | de-rulespec-2026-07-21 | d8d4f1bf211b7640120e88a1055bc67c68134109 | success |
