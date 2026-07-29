@@ -22,7 +22,7 @@ In pipeline order — sources in, executable programs out:
 | [axiom-compose](https://github.com/TheAxiomFoundation/axiom-compose) | Deterministic program composer: spec + encodings → runnable program. |
 | [axiom-oracles](https://github.com/TheAxiomFoundation/axiom-oracles) | Cross-engine validation against PolicyEngine, TAXSIM, and official calculators. |
 | [axiom-microsim](https://github.com/TheAxiomFoundation/axiom-microsim) | Population-scale microsimulation running on the Axiom engine. |
-| [axiom-foundation.org](https://github.com/TheAxiomFoundation/axiom-foundation.org) | Axiom website and app for navigating encoded law. |
+| [axiom.org](https://github.com/TheAxiomFoundation/axiom.org) | Axiom website and app for navigating encoded law. |
 
 ## Rule repositories
 
@@ -39,7 +39,7 @@ Plus per-state repos (`rulespec-us-co`, `rulespec-us-tx`, …) — see
 
 ## Links
 
-- https://axiom-foundation.org
-- hello@axiom-foundation.org
+- https://axiom.org
+- hello@axiom.org
 
 **[Encoding lane registry](../LANES.md)** — live board of every jurisdiction lane: activity, release pins, owners, standing constraints. Auto-refreshed every 6h.

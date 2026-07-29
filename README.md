@@ -11,7 +11,7 @@ validation.
 
 | Project | Description |
 | --- | --- |
-| [axiom-foundation.org](https://github.com/TheAxiomFoundation/axiom-foundation.org) | Axiom website and app for navigating encoded law. |
+| [axiom.org](https://github.com/TheAxiomFoundation/axiom.org) | Axiom website and app for navigating encoded law. |
 | [axiom-rules-engine](https://github.com/TheAxiomFoundation/axiom-rules-engine) | RuleSpec compiler and runtime. |
 | [axiom-encode](https://github.com/TheAxiomFoundation/axiom-encode) | AI-assisted RuleSpec encoding and validation tooling. |
 | [axiom-scrapers](https://github.com/TheAxiomFoundation/axiom-scrapers) | Ingestion tooling for collecting and normalizing legal source text. |
@@ -142,5 +142,5 @@ path_rules:
 
 ## Links
 
-- https://axiom-foundation.org
-- hello@axiom-foundation.org
+- https://axiom.org
+- hello@axiom.org
