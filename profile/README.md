@@ -50,9 +50,11 @@ Sources in, executable programs out:
 
 ## Encodings
 
-RuleSpec corpora live in per-country repositories.
+RuleSpec corpora live in per-country repositories. The two groups below
+differ in coverage depth, not in kind — every lane carries encodings with
+companion tests as it grows.
 
-Country monorepos with companion tests:
+Broad country corpora:
 [rulespec-us](https://github.com/TheAxiomFoundation/rulespec-us) (federal
 plus state law as `us-XX/` directories),
 [rulespec-uk](https://github.com/TheAxiomFoundation/rulespec-uk),
@@ -62,7 +64,8 @@ plus state law as `us-XX/` directories),
 [rulespec-gh](https://github.com/TheAxiomFoundation/rulespec-gh),
 [rulespec-nz](https://github.com/TheAxiomFoundation/rulespec-nz).
 
-Source registries building toward oracle parity:
+Earlier-stage lanes (self-described source registries, building toward
+oracle parity):
 [rulespec-bo](https://github.com/TheAxiomFoundation/rulespec-bo),
 [rulespec-co](https://github.com/TheAxiomFoundation/rulespec-co),
 [rulespec-dk](https://github.com/TheAxiomFoundation/rulespec-dk),
