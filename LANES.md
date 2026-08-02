@@ -4,13 +4,13 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-01 — Encode Torbay working-age council tax reduction (#178) | 8 | uk-rulespec-2026-07-26 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-02 — Encode Milton Keynes working-age CTR scheme (wave 4) (#179) | 2 | uk-rulespec-2026-07-26 | c326d1ac0acdb557f047a3054160b19dd72602fa | in_progress |
+| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-01 — Merge pull request #1192 from TheAxiomFoundation/encode/us-tariff-t0 | 70 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 2 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-08-01 — Merge pull request #20 from TheAxiomFoundation/docs/md-audit-rulespec-ug | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-08-01 — Merge pull request #15 from TheAxiomFoundation/docs/md-audit-rulespec-ng | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [gh](https://github.com/TheAxiomFoundation/rulespec-gh) | 2026-08-01 — Merge pull request #34 from TheAxiomFoundation/docs/md-audit-rulespec-gh | 2 | gh-rulespec-2026-07-12 | f4b952b7ba83d8382d0074b64b27ba6ea9a7637b | failure |
-| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #32 from TheAxiomFoundation/docs/md-audit-rulespec-de | 11 | de-rulespec-2026-07-21 | d8d4f1bf211b7640120e88a1055bc67c68134109 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-01 — Merge pull request #1191 from TheAxiomFoundation/chore/pin-tariff-t0-corpus-successor | 70 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [zm](https://github.com/TheAxiomFoundation/rulespec-zm) | 2026-07-24 — Merge pull request #23 from TheAxiomFoundation/land/lane-verified-pn2008-cap256-act2023-25 | 1 | zm-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
