@@ -368,6 +368,7 @@ jobs:
           AUTHORIZATION_PATH: ${{ inputs.migration-authorization-path }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           RETIRED_SCHEMA_BOOTSTRAP: ${{ inputs.retired-schema-bootstrap-sha256 }}
@@ -419,6 +420,8 @@ jobs:
           if SHA.fullmatch(base) is None:
               fail("protected base SHA is missing or malformed")
           if event == "pull_request":
+              if os.environ["PR_BASE_REF"] != "main":
+                  fail("pull request must target the protected main branch")
               candidate = os.environ["PR_HEAD_SHA"]
               try:
                   pull_request = int(os.environ["PR_NUMBER"])
@@ -450,16 +453,31 @@ jobs:
           mode, kind, _object_id = metadata.split(b" ", 2)
           if listed.decode("utf-8") != path_text or mode != b"100644" or kind != b"blob":
               fail("protected authorization is not a regular non-executable file")
+          def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+              result: dict[str, object] = {}
+              for key, value in pairs:
+                  if key in result:
+                      fail(f"protected authorization contains duplicate key {key!r}")
+                  result[key] = value
+              return result
+
           try:
-              payload = json.loads(git("show", f"{base}:{path_text}").stdout)
+              source = git("show", f"{base}:{path_text}").stdout.decode("utf-8")
+              payload = json.loads(
+                  source,
+                  object_pairs_hook=unique_object,
+                  parse_constant=lambda value: fail(
+                      f"protected authorization contains invalid constant {value}"
+                  ),
+              )
           except (UnicodeDecodeError, json.JSONDecodeError) as exc:
               fail(f"protected authorization is not valid UTF-8 JSON: {exc}")
-          if not isinstance(payload, dict) or set(payload) != {"format", "migrations"}:
+          if type(payload) is not dict or set(payload) != {"format", "migrations"}:
               fail("authorization must contain exactly format and migrations")
           if payload["format"] != "axiom/reviewed-migrations/v1":
               fail("authorization format is unsupported")
           migrations = payload["migrations"]
-          if not isinstance(migrations, list):
+          if type(migrations) is not list:
               fail("authorization migrations must be an array")
           matches = []
           expected_keys = {
@@ -469,13 +487,16 @@ jobs:
               "validation_waiver_bootstrap_sha256",
           }
           for record in migrations:
-              if not isinstance(record, dict) or set(record) != expected_keys:
+              if type(record) is not dict or set(record) != expected_keys:
                   fail("each migration authorization must use the exact reviewed schema")
               if (
-                  not isinstance(record["pull_request"], int)
-                  or SHA.fullmatch(str(record["head"])) is None
-                  or DIGEST.fullmatch(str(record["retired_schema_bootstrap_sha256"])) is None
-                  or DIGEST.fullmatch(str(record["validation_waiver_bootstrap_sha256"])) is None
+                  type(record["pull_request"]) is not int
+                  or type(record["head"]) is not str
+                  or SHA.fullmatch(record["head"]) is None
+                  or type(record["retired_schema_bootstrap_sha256"]) is not str
+                  or DIGEST.fullmatch(record["retired_schema_bootstrap_sha256"]) is None
+                  or type(record["validation_waiver_bootstrap_sha256"]) is not str
+                  or DIGEST.fullmatch(record["validation_waiver_bootstrap_sha256"]) is None
               ):
                   fail("migration authorization contains malformed identities")
               if record["pull_request"] == pull_request and record["head"] == candidate:

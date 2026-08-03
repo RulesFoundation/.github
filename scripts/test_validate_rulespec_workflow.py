@@ -89,6 +89,7 @@ def run_authorization(
     pr_number: str = "911",
     github_sha: str = "",
     github_ref: str = "refs/pull/911/merge",
+    pr_base_ref: str = "main",
     repository: str = "TheAxiomFoundation/rulespec-us",
     retired: str = RETIRED,
     waiver: str = WAIVER,
@@ -99,6 +100,7 @@ def run_authorization(
         "AUTHORIZATION_PATH": ".axiom/reviewed-migrations.json",
         "BASE_SHA": base,
         "EVENT_NAME": event,
+        "PR_BASE_REF": pr_base_ref,
         "PR_HEAD_SHA": pr_head,
         "PR_NUMBER": pr_number,
         "RETIRED_SCHEMA_BOOTSTRAP": retired,
@@ -120,6 +122,18 @@ def run_authorization(
 def main() -> None:
     temp, root, base, topic = fixture()
     try:
+        ordinary = run_authorization(
+            root,
+            base=base,
+            event="pull_request",
+            pr_head=topic,
+            retired="",
+            waiver="",
+            guard="true",
+        )
+        assert ordinary.returncode == 0, ordinary.stderr
+        assert ordinary.stdout.splitlines() == ["authorized=false", "candidate="]
+
         approved = run_authorization(
             root, base=base, event="pull_request", pr_head=topic
         )
@@ -133,6 +147,14 @@ def main() -> None:
             root, base=base, event="pull_request", pr_head=base
         )
         assert wrong_head.returncode != 0
+        wrong_base = run_authorization(
+            root,
+            base=base,
+            event="pull_request",
+            pr_head=topic,
+            pr_base_ref="release",
+        )
+        assert wrong_base.returncode != 0
         wrong_digest = run_authorization(
             root,
             base=base,
@@ -141,6 +163,22 @@ def main() -> None:
             waiver="3" * 64,
         )
         assert wrong_digest.returncode != 0
+        wrong_retired = run_authorization(
+            root,
+            base=base,
+            event="pull_request",
+            pr_head=topic,
+            retired="3" * 64,
+        )
+        assert wrong_retired.returncode != 0
+        wrong_pr = run_authorization(
+            root,
+            base=base,
+            event="pull_request",
+            pr_head=topic,
+            pr_number="912",
+        )
+        assert wrong_pr.returncode != 0
         wrong_repository = run_authorization(
             root,
             base=base,
@@ -150,7 +188,106 @@ def main() -> None:
         )
         assert wrong_repository.returncode != 0
 
+        authorization = root / ".axiom/reviewed-migrations.json"
+        duplicate = authorization.read_text().replace(
+            f'"head": "{topic}"',
+            f'"head": "{"0" * 40}", "head": "{topic}"',
+        )
+        authorization.write_text(duplicate)
+        duplicate_base = commit(root, "duplicate authorization key")
+        duplicate_result = run_authorization(
+            root, base=duplicate_base, event="pull_request", pr_head=topic
+        )
+        assert duplicate_result.returncode != 0
+
+        authorization.write_text("{\"format\":")
+        malformed_base = commit(root, "malformed authorization")
+        malformed_result = run_authorization(
+            root, base=malformed_base, event="pull_request", pr_head=topic
+        )
+        assert malformed_result.returncode != 0
+
+        write_authorization(root, topic=topic)
+        authorization.write_bytes(authorization.read_text().encode("utf-16"))
+        utf16_base = commit(root, "non-UTF-8 authorization")
+        utf16_result = run_authorization(
+            root, base=utf16_base, event="pull_request", pr_head=topic
+        )
+        assert utf16_result.returncode != 0
+
+        authorization.unlink()
+        target = root / "authorization-target.json"
+        target.write_text("{}\n")
+        authorization.symlink_to(Path("..") / target.name)
+        symlink_base = commit(root, "symlink authorization")
+        symlink_result = run_authorization(
+            root, base=symlink_base, event="pull_request", pr_head=topic
+        )
+        assert symlink_result.returncode != 0
+
         git(root, "switch", "-q", "main")
+        git(root, "reset", "--hard", base)
+        non_merge = run_authorization(
+            root,
+            base=base,
+            event="push",
+            github_sha=topic,
+            github_ref="refs/heads/main",
+        )
+        assert non_merge.returncode != 0
+
+        altered_tree = subprocess.run(
+            [
+                "git",
+                "commit-tree",
+                git(root, "rev-parse", f"{base}^{{tree}}"),
+                "-p",
+                base,
+                "-p",
+                topic,
+            ],
+            cwd=root,
+            check=True,
+            input="altered merge tree\n",
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        altered_result = run_authorization(
+            root,
+            base=base,
+            event="push",
+            github_sha=altered_tree,
+            github_ref="refs/heads/main",
+        )
+        assert altered_result.returncode != 0
+
+        octopus = subprocess.run(
+            [
+                "git",
+                "commit-tree",
+                git(root, "rev-parse", f"{base}^{{tree}}"),
+                "-p",
+                base,
+                "-p",
+                topic,
+                "-p",
+                duplicate_base,
+            ],
+            cwd=root,
+            check=True,
+            input="octopus\n",
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        octopus_result = run_authorization(
+            root,
+            base=base,
+            event="push",
+            github_sha=octopus,
+            github_ref="refs/heads/main",
+        )
+        assert octopus_result.returncode != 0
+
         git(root, "merge", "--no-ff", "-qm", "merge reviewed topic", topic)
         merge = git(root, "rev-parse", "HEAD")
         approved_push = run_authorization(
@@ -161,6 +298,14 @@ def main() -> None:
             github_ref="refs/heads/main",
         )
         assert approved_push.returncode == 0, approved_push.stderr
+        wrong_first_parent = run_authorization(
+            root,
+            base=git(root, "rev-parse", f"{base}^"),
+            event="push",
+            github_sha=merge,
+            github_ref="refs/heads/main",
+        )
+        assert wrong_first_parent.returncode != 0
 
         (root / "later.txt").write_text("later\n")
         later_base = commit(root, "later base")
