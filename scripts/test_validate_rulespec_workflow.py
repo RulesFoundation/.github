@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise the embedded validation-waiver bootstrap authorization guard."""
+"""Exercise the embedded exact reviewed-migration authorization guard."""
 
 from __future__ import annotations
 
-import hashlib
+import json
 import os
 import subprocess
 import tempfile
@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/validate-rulespec.yml"
-EXPECTED_HASH = "73b126caeeef96d7064137103f7d430aa203dffcf4ca359b3ab22fd6b2197e7c"
-EXPECTED_ANCHOR = "251d8d66dabdebcb763d9e7c9b8322a281440c36"
+RETIRED = "1" * 64
+WAIVER = "2" * 64
 
 
 def git(root: Path, *args: str) -> str:
@@ -22,227 +22,172 @@ def git(root: Path, *args: str) -> str:
     ).stdout.strip()
 
 
-def guard_source() -> str:
-    workflow = WORKFLOW.read_text()
-    start = workflow.index("# waiver-bootstrap-guard-start")
-    end = workflow.index("# waiver-bootstrap-guard-end")
-    block = textwrap.dedent(workflow[start:end].split("\n", 1)[1])
-    assert f'expected_bootstrap="{EXPECTED_HASH}"' in block
-    assert f'reviewed_anchor="{EXPECTED_ANCHOR}"' in block
-    return block
-
-
 def commit(root: Path, message: str) -> str:
     git(root, "add", "-A")
     git(root, "commit", "-qm", message)
     return git(root, "rev-parse", "HEAD")
 
 
-def fixture() -> tuple[tempfile.TemporaryDirectory[str], Path, str, str, str]:
+def authorization_source() -> str:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("# reviewed-migration-authorization-start")
+    end = workflow.index("# reviewed-migration-authorization-end")
+    block = textwrap.dedent(workflow[start:end].split("\n", 1)[1])
+    marker = "python - <<'PY' >> \"$GITHUB_OUTPUT\"\n"
+    assert block.startswith(marker)
+    assert block.endswith("          PY\n") or block.endswith("PY\n")
+    source = block[len(marker) :]
+    source = source.rsplit("\nPY", 1)[0]
+    return textwrap.dedent(source)
+
+
+def write_authorization(root: Path, *, topic: str) -> None:
+    path = root / ".axiom/reviewed-migrations.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "format": "axiom/reviewed-migrations/v1",
+                "migrations": [
+                    {
+                        "pull_request": 911,
+                        "head": topic,
+                        "retired_schema_bootstrap_sha256": RETIRED,
+                        "validation_waiver_bootstrap_sha256": WAIVER,
+                    }
+                ],
+            }
+        )
+        + "\n"
+    )
+
+
+def fixture() -> tuple[tempfile.TemporaryDirectory[str], Path, str, str]:
     temp = tempfile.TemporaryDirectory()
     root = Path(temp.name)
     git(root, "init", "-q", "-b", "main")
     git(root, "config", "user.email", "workflow-test@example.com")
     git(root, "config", "user.name", "Workflow Test")
-    waiver = b"validate_failures:\n  retained: {}\n"
-    (root / "known-validation-gaps.yaml").write_bytes(waiver)
-    anchor = commit(root, "reviewed anchor")
+    (root / "base.txt").write_text("initial\n")
+    common = commit(root, "common")
     git(root, "switch", "-qc", "topic")
-    (root / ".github/workflows").mkdir(parents=True)
-    (root / ".github/workflows/repository-checks.yml").write_text("name: caller\n")
-    (root / "tests").mkdir()
-    (root / "tests/test_legacy_rulespec_freeze.py").write_text("# contract\n")
-    topic = commit(root, "pin shared workflow")
-    digest = hashlib.sha256(waiver).hexdigest()
-    return temp, root, anchor, topic, digest
+    (root / "topic.txt").write_text("reviewed\n")
+    topic = commit(root, "reviewed topic")
+    git(root, "switch", "-q", "main")
+    git(root, "reset", "--hard", common)
+    write_authorization(root, topic=topic)
+    base = commit(root, "authorize exact topic")
+    return temp, root, base, topic
 
 
-def run_guard(
+def run_authorization(
     root: Path,
     *,
-    anchor: str,
-    digest: str,
+    base: str,
     event: str,
-    pr_number: str = "",
     pr_head: str = "",
+    pr_number: str = "911",
     github_sha: str = "",
     github_ref: str = "refs/pull/911/merge",
-    message: str = "",
     repository: str = "TheAxiomFoundation/rulespec-us",
-    base_ref: str = "",
-    bootstrap: bool = True,
-    bootstrap_value: str | None = None,
+    retired: str = RETIRED,
+    waiver: str = WAIVER,
+    guard: str = "false",
 ) -> subprocess.CompletedProcess[str]:
-    protected = root / "protected.yaml"
-    block = guard_source().replace(
-        f'reviewed_anchor="{EXPECTED_ANCHOR}"', f'reviewed_anchor="{anchor}"'
-    ).replace(
-        f'expected_bootstrap="{EXPECTED_HASH}"', f'expected_bootstrap="{digest}"'
-    )
-    script = "\n".join(
-        [
-            "set -euo pipefail",
-            'protected_base="$PROTECTED_BASE"',
-            'base_ref="$BASE_REF"',
-            block,
-        ]
-    )
     env = {
         **os.environ,
-        "BOOTSTRAP_SHA256": (
-            bootstrap_value if bootstrap_value is not None else digest if bootstrap else ""
-        ),
+        "AUTHORIZATION_PATH": ".axiom/reviewed-migrations.json",
+        "BASE_SHA": base,
         "EVENT_NAME": event,
-        "PR_NUMBER": pr_number,
         "PR_HEAD_SHA": pr_head,
-        "HEAD_COMMIT_MESSAGE": message,
+        "PR_NUMBER": pr_number,
+        "RETIRED_SCHEMA_BOOTSTRAP": retired,
+        "VALIDATION_WAIVER_BOOTSTRAP": waiver,
+        "RUN_GENERATED_GUARD": guard,
         "GITHUB_REPOSITORY": repository,
-        "GITHUB_SHA": github_sha or git(root, "rev-parse", "HEAD"),
         "GITHUB_REF": github_ref,
-        "PROTECTED_BASE": str(protected),
-        "BASE_REF": base_ref or anchor,
+        "GITHUB_SHA": github_sha or pr_head,
     }
     return subprocess.run(
-        ["bash", "-c", script], cwd=root, env=env, capture_output=True, text=True
+        ["python", "-c", authorization_source()],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
     )
 
 
 def main() -> None:
-    temp, root, anchor, topic, digest = fixture()
+    temp, root, base, topic = fixture()
     try:
-        approved_pr = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="pull_request",
-            pr_number="911",
-            pr_head=topic,
+        approved = run_authorization(
+            root, base=base, event="pull_request", pr_head=topic
         )
-        assert approved_pr.returncode == 0, approved_pr.stderr
+        assert approved.returncode == 0, approved.stderr
+        assert approved.stdout.splitlines() == [
+            "authorized=true",
+            f"candidate={topic}",
+        ]
 
-        wrong_repo = run_guard(
+        wrong_head = run_authorization(
+            root, base=base, event="pull_request", pr_head=base
+        )
+        assert wrong_head.returncode != 0
+        wrong_digest = run_authorization(
             root,
-            anchor=anchor,
-            digest=digest,
+            base=base,
             event="pull_request",
-            pr_number="911",
+            pr_head=topic,
+            waiver="3" * 64,
+        )
+        assert wrong_digest.returncode != 0
+        wrong_repository = run_authorization(
+            root,
+            base=base,
+            event="pull_request",
             pr_head=topic,
             repository="example/fork",
         )
-        assert wrong_repo.returncode != 0
-
-        wrong_hash = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="pull_request",
-            pr_number="911",
-            pr_head=topic,
-            bootstrap_value="0" * 64,
-        )
-        assert wrong_hash.returncode != 0
-
-        wrong_pr = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="pull_request",
-            pr_number="912",
-            pr_head=topic,
-        )
-        assert wrong_pr.returncode != 0
-
-        (root / "unexpected.txt").write_text("drift\n")
-        drift = commit(root, "unreviewed drift")
-        changed_pr = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="pull_request",
-            pr_number="911",
-            pr_head=drift,
-        )
-        assert changed_pr.returncode != 0
+        assert wrong_repository.returncode != 0
 
         git(root, "switch", "-q", "main")
-        (root / "base.txt").write_text("protected base\n")
-        base = commit(root, "base advance")
-        git(root, "merge", "--no-ff", "-qm", "Merge pull request #911 from org/topic", topic)
+        git(root, "merge", "--no-ff", "-qm", "merge reviewed topic", topic)
         merge = git(root, "rev-parse", "HEAD")
-        approved_push = run_guard(
+        approved_push = run_authorization(
             root,
-            anchor=anchor,
-            digest=digest,
+            base=base,
             event="push",
             github_sha=merge,
             github_ref="refs/heads/main",
-            message="Merge pull request #911 from org/topic",
-            base_ref=base,
         )
         assert approved_push.returncode == 0, approved_push.stderr
 
-        (root / "later.txt").write_text("later protected change\n")
-        later_base = commit(root, "later base advance")
+        (root / "later.txt").write_text("later\n")
+        later_base = commit(root, "later base")
         replay_tree = git(root, "rev-parse", f"{later_base}^{{tree}}")
         replay = subprocess.run(
-            [
-                "git",
-                "commit-tree",
-                replay_tree,
-                "-p",
-                later_base,
-                "-p",
-                topic,
-            ],
+            ["git", "commit-tree", replay_tree, "-p", later_base, "-p", topic],
             cwd=root,
             check=True,
-            input="Merge pull request #911 from org/topic\n",
+            input="replay\n",
             capture_output=True,
             text=True,
         ).stdout.strip()
-        git(root, "reset", "--hard", replay)
-        replayed_push = run_guard(
+        replayed = run_authorization(
             root,
-            anchor=anchor,
-            digest=digest,
+            base=later_base,
             event="push",
             github_sha=replay,
             github_ref="refs/heads/main",
-            message="Merge pull request #911 from org/topic",
-            base_ref=later_base,
         )
-        assert replayed_push.returncode != 0
-
-        forged_push = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="push",
-            github_sha=base,
-            github_ref="refs/heads/main",
-            message="Merge pull request #911 from org/topic",
-            base_ref=anchor,
-        )
-        assert forged_push.returncode != 0
-
-        ordinary = run_guard(
-            root,
-            anchor=anchor,
-            digest=digest,
-            event="pull_request",
-            pr_number="999",
-            pr_head=topic,
-            base_ref=anchor,
-            bootstrap=False,
-        )
-        assert ordinary.returncode == 0, ordinary.stderr
-        assert (root / "protected.yaml").read_bytes() == git(
-            root, "show", f"{anchor}:known-validation-gaps.yaml"
-        ).encode() + b"\n"
+        assert replayed.returncode != 0
     finally:
         temp.cleanup()
 
-    print("validation-waiver bootstrap authorization: ok")
+    workflow = WORKFLOW.read_text()
+    assert "migration-authorization-path" in workflow
+    assert "bootstrap is not bound to an exact protected authorization" in workflow
+    print("exact reviewed-migration authorization: ok")
 
 
 if __name__ == "__main__":
