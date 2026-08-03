@@ -119,6 +119,49 @@ def run_authorization(
     )
 
 
+def test_conflicted_merge_is_rejected() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        git(root, "init", "-q", "-b", "main")
+        git(root, "config", "user.email", "workflow-test@example.com")
+        git(root, "config", "user.name", "Workflow Test")
+        conflict = root / "conflict.txt"
+        conflict.write_text("common\n")
+        common = commit(root, "common")
+        git(root, "switch", "-qc", "topic")
+        conflict.write_text("topic\n")
+        topic = commit(root, "conflicting topic")
+        git(root, "switch", "-q", "main")
+        git(root, "reset", "--hard", common)
+        conflict.write_text("main\n")
+        write_authorization(root, topic=topic)
+        base = commit(root, "authorize conflicting topic")
+        forged_merge = subprocess.run(
+            [
+                "git",
+                "commit-tree",
+                git(root, "rev-parse", f"{base}^{{tree}}"),
+                "-p",
+                base,
+                "-p",
+                topic,
+            ],
+            cwd=root,
+            check=True,
+            input="forged conflicted merge\n",
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        result = run_authorization(
+            root,
+            base=base,
+            event="push",
+            github_sha=forged_merge,
+            github_ref="refs/heads/main",
+        )
+        assert result.returncode != 0
+
+
 def main() -> None:
     temp, root, base, topic = fixture()
     try:
@@ -328,6 +371,8 @@ def main() -> None:
         assert replayed.returncode != 0
     finally:
         temp.cleanup()
+
+    test_conflicted_merge_is_rejected()
 
     workflow = WORKFLOW.read_text()
     assert "migration-authorization-path" in workflow
