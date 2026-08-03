@@ -68,6 +68,14 @@ on:
         required: false
         type: boolean
         default: true
+      migration-authorization-path:
+        description: >-
+          Optional path to a reviewed-migration authorization JSON file read
+          from the protected base commit. Required whenever the generated guard
+          is disabled or a bootstrap digest is supplied.
+        required: false
+        type: string
+        default: ""
       retired-schema-bootstrap-sha256:
         description: >-
           Exact SHA-256 of the one reviewed rulespec-us PR #911 freeze file.
@@ -353,6 +361,158 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Authorize exact reviewed migration
+        id: migration_authorization
+        shell: bash
+        env:
+          AUTHORIZATION_PATH: ${{ inputs.migration-authorization-path }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          RETIRED_SCHEMA_BOOTSTRAP: ${{ inputs.retired-schema-bootstrap-sha256 }}
+          VALIDATION_WAIVER_BOOTSTRAP: ${{ inputs.validation-waiver-bootstrap-sha256 }}
+          RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
+        run: |
+          set -euo pipefail
+          # reviewed-migration-authorization-start
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import PurePosixPath
+
+          SHA = re.compile(r"[0-9a-f]{40}")
+          DIGEST = re.compile(r"[0-9a-f]{64}")
+
+          def fail(message: str) -> None:
+              raise SystemExit(f"ReviewedMigrationAuthorizationError: {message}")
+
+          def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+              return subprocess.run(["git", *args], check=check, capture_output=True)
+
+          requested = (
+              os.environ["RUN_GENERATED_GUARD"] != "true"
+              or bool(os.environ["RETIRED_SCHEMA_BOOTSTRAP"])
+              or bool(os.environ["VALIDATION_WAIVER_BOOTSTRAP"])
+          )
+          path_text = os.environ["AUTHORIZATION_PATH"].strip()
+          if not requested:
+              print("authorized=false")
+              print("candidate=")
+              raise SystemExit(0)
+          if os.environ.get("GITHUB_REPOSITORY") != "TheAxiomFoundation/rulespec-us":
+              fail("migration authorization is restricted to rulespec-us")
+          path = PurePosixPath(path_text)
+          if (
+              not path_text
+              or path.is_absolute()
+              or ".." in path.parts
+              or path.as_posix() != path_text
+              or path.suffix != ".json"
+          ):
+              fail("authorization path is not a canonical repository JSON path")
+
+          event = os.environ["EVENT_NAME"]
+          base = os.environ["BASE_SHA"]
+          if SHA.fullmatch(base) is None:
+              fail("protected base SHA is missing or malformed")
+          if event == "pull_request":
+              if os.environ["PR_BASE_REF"] != "main":
+                  fail("pull request must target the protected main branch")
+              candidate = os.environ["PR_HEAD_SHA"]
+              try:
+                  pull_request = int(os.environ["PR_NUMBER"])
+              except ValueError:
+                  fail("pull-request number is missing or malformed")
+          elif event == "push" and os.environ.get("GITHUB_REF") == "refs/heads/main":
+              parents = git("rev-list", "--parents", "-n", "1", os.environ["GITHUB_SHA"]).stdout
+              fields = parents.decode("ascii").strip().split()
+              if len(fields) != 3 or fields[1] != base:
+                  fail("push must be a two-parent first-parent merge into protected main")
+              candidate = fields[2]
+              if git("merge-base", "--is-ancestor", candidate, base, check=False).returncode == 0:
+                  fail("reviewed topic parent was already contained in protected main")
+              expected_tree = git("merge-tree", "--write-tree", base, candidate).stdout.strip()
+              actual_tree = git("rev-parse", f"{os.environ['GITHUB_SHA']}^{{tree}}").stdout.strip()
+              if expected_tree != actual_tree:
+                  fail("merge tree differs from the reviewed topic merged into main")
+              pull_request = 911
+          else:
+              fail("migration authorization is valid only for a pull request or its main merge")
+          if SHA.fullmatch(candidate) is None:
+              fail("candidate head SHA is missing or malformed")
+
+          tree = git("ls-tree", "-z", base, "--", path_text).stdout
+          records = [record for record in tree.split(b"\0") if record]
+          if len(records) != 1:
+              fail("protected base does not contain exactly one authorization file")
+          metadata, listed = records[0].split(b"\t", 1)
+          mode, kind, _object_id = metadata.split(b" ", 2)
+          if listed.decode("utf-8") != path_text or mode != b"100644" or kind != b"blob":
+              fail("protected authorization is not a regular non-executable file")
+          def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+              result: dict[str, object] = {}
+              for key, value in pairs:
+                  if key in result:
+                      fail(f"protected authorization contains duplicate key {key!r}")
+                  result[key] = value
+              return result
+
+          try:
+              source = git("show", f"{base}:{path_text}").stdout.decode("utf-8")
+              payload = json.loads(
+                  source,
+                  object_pairs_hook=unique_object,
+                  parse_constant=lambda value: fail(
+                      f"protected authorization contains invalid constant {value}"
+                  ),
+              )
+          except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+              fail(f"protected authorization is not valid UTF-8 JSON: {exc}")
+          if type(payload) is not dict or set(payload) != {"format", "migrations"}:
+              fail("authorization must contain exactly format and migrations")
+          if payload["format"] != "axiom/reviewed-migrations/v1":
+              fail("authorization format is unsupported")
+          migrations = payload["migrations"]
+          if type(migrations) is not list:
+              fail("authorization migrations must be an array")
+          matches = []
+          expected_keys = {
+              "pull_request",
+              "head",
+              "retired_schema_bootstrap_sha256",
+              "validation_waiver_bootstrap_sha256",
+          }
+          for record in migrations:
+              if type(record) is not dict or set(record) != expected_keys:
+                  fail("each migration authorization must use the exact reviewed schema")
+              if (
+                  type(record["pull_request"]) is not int
+                  or type(record["head"]) is not str
+                  or SHA.fullmatch(record["head"]) is None
+                  or type(record["retired_schema_bootstrap_sha256"]) is not str
+                  or DIGEST.fullmatch(record["retired_schema_bootstrap_sha256"]) is None
+                  or type(record["validation_waiver_bootstrap_sha256"]) is not str
+                  or DIGEST.fullmatch(record["validation_waiver_bootstrap_sha256"]) is None
+              ):
+                  fail("migration authorization contains malformed identities")
+              if record["pull_request"] == pull_request and record["head"] == candidate:
+                  matches.append(record)
+          if len(matches) != 1:
+              fail("candidate is not exactly authorized by the protected base")
+          record = matches[0]
+          if record["retired_schema_bootstrap_sha256"] != os.environ["RETIRED_SCHEMA_BOOTSTRAP"]:
+              fail("retired-schema bootstrap digest differs from the protected authorization")
+          if record["validation_waiver_bootstrap_sha256"] != os.environ["VALIDATION_WAIVER_BOOTSTRAP"]:
+              fail("validation-waiver bootstrap digest differs from the protected authorization")
+          print("authorized=true")
+          print(f"candidate={candidate}")
+          PY
+          # reviewed-migration-authorization-end
+
       - name: Resolve shard validation roots
         id: resolve_roots
         shell: bash
@@ -616,6 +776,7 @@ jobs:
           REF_NAME: ${{ github.ref }}
           IS_FIRST_SHARD: ${{ matrix.shard == needs.shards.outputs.first }}
           RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
+          MIGRATION_AUTHORIZED: ${{ steps.migration_authorization.outputs.authorized }}
         run: |
           set -euo pipefail
           python - "$RUNNER_TEMP/retired-schema-skip.txt" <<'PY'
@@ -774,43 +935,8 @@ jobs:
                   fail("the sealed freeze file cannot be removed")
               bootstrap_digest = os.environ.get("BOOTSTRAP_SHA256", "").strip()
               if bootstrap_digest:
-                  authorized_pr = (
-                      os.environ["EVENT_NAME"] == "pull_request"
-                      and os.environ.get("PR_NUMBER") == "911"
-                  )
-                  push_candidate = (
-                      os.environ["EVENT_NAME"] == "push"
-                      and os.environ.get("REF_NAME") == "refs/heads/main"
-                      and re.fullmatch(
-                          r"Merge pull request #911 from .+",
-                          (
-                              os.environ.get("HEAD_MESSAGE", "").splitlines() or [""]
-                          )[0],
-                      )
-                      is not None
-                  )
-                  authorized_push = False
-                  if push_candidate:
-                      commit = git("rev-list", "--parents", "-n", "1", head_ref).stdout
-                      parents = commit.decode("ascii").strip().split()
-                      if len(parents) != 3 or parents[1] != base_ref:
-                          fail("bootstrap push must be the first-parent merge of PR #911")
-                      topic_parent = parents[2]
-                      if git(
-                          "merge-base", "--is-ancestor", topic_parent, base_ref, check=False
-                      ).returncode == 0:
-                          fail("bootstrap topic parent was already merged into the protected base")
-                      topic_raw = immutable_blob(topic_parent, freeze_path)
-                      assert topic_raw is not None
-                      authorized_push = (
-                          hashlib.sha256(topic_raw).hexdigest() == bootstrap_digest
-                      )
-                  if (
-                      os.environ.get("CALLER_REPOSITORY")
-                      != "TheAxiomFoundation/rulespec-us"
-                      or not (authorized_pr or authorized_push)
-                  ):
-                      fail("bootstrap is not authorized for this caller or event")
+                  if os.environ.get("MIGRATION_AUTHORIZED") != "true":
+                      fail("bootstrap is not bound to an exact protected authorization")
                   if re.fullmatch(r"[0-9a-f]{64}", bootstrap_digest) is None:
                       fail("bootstrap digest must be a lowercase SHA-256")
                   if head_raw is None or hashlib.sha256(head_raw).hexdigest() != bootstrap_digest:
@@ -1189,6 +1315,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          MIGRATION_AUTHORIZED: ${{ steps.migration_authorization.outputs.authorized }}
+          MIGRATION_CANDIDATE: ${{ steps.migration_authorization.outputs.candidate }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -1202,62 +1330,11 @@ jobs:
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
           # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
-            expected_bootstrap="73b126caeeef96d7064137103f7d430aa203dffcf4ca359b3ab22fd6b2197e7c"
-            reviewed_anchor="251d8d66dabdebcb763d9e7c9b8322a281440c36"
-            candidate_ref=""
-            if [ "$GITHUB_REPOSITORY" != "TheAxiomFoundation/rulespec-us" ]; then
-              echo "ValidationWaiverBootstrapUnauthorized: bootstrap is restricted to rulespec-us" >&2
+            if [ "$MIGRATION_AUTHORIZED" != "true" ]; then
+              echo "ValidationWaiverBootstrapUnauthorized: bootstrap is not bound to an exact protected authorization" >&2
               exit 1
             fi
-            if [ "$BOOTSTRAP_SHA256" != "$expected_bootstrap" ]; then
-              echo "ValidationWaiverBootstrapHashRejected: unsupported bootstrap hash" >&2
-              exit 1
-            fi
-            if [ "$EVENT_NAME" = "pull_request" ] && [ "$PR_NUMBER" = "911" ]; then
-              candidate_ref="$PR_HEAD_SHA"
-            elif [ "$EVENT_NAME" = "push" ] && [ "$GITHUB_REF" = "refs/heads/main" ] && \
-                 [[ "$HEAD_COMMIT_MESSAGE" == "Merge pull request #911 from "* ]]; then
-              read -r merge_commit first_parent topic_parent extra_parent < <(
-                git rev-list --parents -n 1 "$GITHUB_SHA"
-              )
-              if [ -n "${extra_parent:-}" ] || [ -z "${topic_parent:-}" ] || \
-                 [ "$first_parent" != "$base_ref" ]; then
-                echo "ValidationWaiverBootstrapTopology: push must be the two-parent first-parent merge of PR #911" >&2
-                exit 1
-              fi
-              if git merge-base --is-ancestor "$topic_parent" "$first_parent"; then
-                echo "ValidationWaiverBootstrapReplay: topic parent is already contained in the protected base" >&2
-                exit 1
-              fi
-              expected_tree="$(git merge-tree --write-tree "$first_parent" "$topic_parent")" || {
-                echo "ValidationWaiverBootstrapMergeConflict: PR #911 must merge without manual conflict resolution" >&2
-                exit 1
-              }
-              actual_tree="$(git rev-parse "$GITHUB_SHA^{tree}")"
-              if [ "$actual_tree" != "$expected_tree" ]; then
-                echo "ValidationWaiverBootstrapMergeTree: merge tree differs from the reviewed topic merged into the protected base" >&2
-                exit 1
-              fi
-              candidate_ref="$topic_parent"
-            else
-              echo "ValidationWaiverBootstrapUnauthorized: event is not rulespec-us PR #911 or its merge push" >&2
-              exit 1
-            fi
-            if ! git merge-base --is-ancestor "$reviewed_anchor" "$candidate_ref"; then
-              echo "ValidationWaiverBootstrapAnchor: candidate does not descend from the reviewed PR #911 head" >&2
-              exit 1
-            fi
-            unexpected_paths="$(
-              git diff --name-only --no-renames "$reviewed_anchor" "$candidate_ref" -- \
-                ':(exclude).github/workflows/repository-checks.yml' \
-                ':(exclude)tests/test_legacy_rulespec_freeze.py'
-            )"
-            if [ -n "$unexpected_paths" ]; then
-              echo "ValidationWaiverBootstrapDrift: unreviewed paths changed after the PR #911 anchor:" >&2
-              printf '%s\n' "$unexpected_paths" >&2
-              exit 1
-            fi
-            candidate_sha256="$(git show "$candidate_ref:known-validation-gaps.yaml" | sha256sum | cut -d ' ' -f 1)"
+            candidate_sha256="$(git show "$MIGRATION_CANDIDATE:known-validation-gaps.yaml" | sha256sum | cut -d ' ' -f 1)"
             if [ "$candidate_sha256" != "$BOOTSTRAP_SHA256" ]; then
               echo "ValidationWaiverBootstrapCandidateMismatch: candidate waiver hash does not match bootstrap" >&2
               exit 1
