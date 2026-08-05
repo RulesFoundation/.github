@@ -4,8 +4,8 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-04 — Encode Hertsmere working-age council tax reduction (#214) | 0 | uk-rulespec-2026-08-04 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-04 — Merge pull request #1211 from TheAxiomFoundation/pin/corpus-fns-abawd-memo | 70 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-04 — Encode Hertsmere working-age council tax reduction (#214) | 16 | uk-rulespec-2026-08-04 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-04 — Merge pull request #1211 from TheAxiomFoundation/pin/corpus-fns-abawd-memo | 71 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-08-01 — Merge pull request #20 from TheAxiomFoundation/docs/md-audit-rulespec-ug | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
@@ -16,7 +16,7 @@
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-23 — Merge pull request #117 from TheAxiomFoundation/ci/keyring-validate-pins | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 1 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-07-23 — Merge pull request #9 from TheAxiomFoundation/ci/keyring-validate-pins | 2 | dk-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 
 <!-- curated:start -->
