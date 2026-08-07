@@ -4,8 +4,8 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-07 — Merge pull request #248 from TheAxiomFoundation/docs/encoding-playbook | 0 | uk-rulespec-2026-08-04 | c326d1ac0acdb557f047a3054160b19dd72602fa | in_progress |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-05 — Merge pull request #1221 from TheAxiomFoundation/fix/26-32-companion-test-refs | 72 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-07 — Declare 523 unmapped outputs as pending classification (#1237) | 73 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-07 — Merge pull request #249 from TheAxiomFoundation/rebind/uk-rulespec-2026-08-07 | 3 | uk-rulespec-2026-08-07 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-08-01 — Merge pull request #20 from TheAxiomFoundation/docs/md-audit-rulespec-ug | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
