@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-08 — Add Redcar and Cleveland CTR scheme (#255) | 0 | uk-rulespec-2026-08-07 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
+| [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-09 — Merge pull request #256 from TheAxiomFoundation/rebind/uk-rulespec-2026-08-08 | 1 | uk-rulespec-2026-08-08 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-07 — Decouple the artifact-publish cadence from the PR compile gate (#1235) | 73 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
