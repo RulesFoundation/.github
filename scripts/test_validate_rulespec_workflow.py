@@ -41,6 +41,16 @@ def authorization_source() -> str:
     return textwrap.dedent(source)
 
 
+def test_retired_schema_freeze_classifies_only_plural_citations() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Verify immutable retired-schema freeze")
+    end = workflow.index("      - name: Fetch pinned signed corpus release object")
+    freeze_step = workflow[start:end]
+
+    assert '"corpus_citation_paths" in source_verification' in freeze_step
+    assert "upstream_source_check" not in freeze_step
+
+
 def write_authorization(root: Path, *, topic: str) -> None:
     path = root / ".axiom/reviewed-migrations.json"
     path.parent.mkdir(parents=True, exist_ok=True)

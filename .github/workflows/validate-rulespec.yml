@@ -861,9 +861,9 @@ jobs:
               if not isinstance(module, dict):
                   return False
               source_verification = module.get("source_verification")
-              return isinstance(source_verification, dict) and bool(
-                  {"corpus_citation_paths", "upstream_source_check"}
-                  & set(source_verification)
+              return (
+                  isinstance(source_verification, dict)
+                  and "corpus_citation_paths" in source_verification
               )
 
           head_ref = os.environ["GITHUB_SHA"]
@@ -891,8 +891,6 @@ jobs:
                   "-l",
                   "-e",
                   "corpus_citation_paths:",
-                  "-e",
-                  "upstream_source_check:",
                   head_ref,
                   "--",
                   "*.yaml",
