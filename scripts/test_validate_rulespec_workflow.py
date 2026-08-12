@@ -73,6 +73,7 @@ def test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix() -> 
     assert "matrix.shard == needs.shards.outputs.first" not in audit_step
     assert '--partition-key "${{ matrix.shard }}"' in audit_step
     assert "--partition-keys-json '${{ needs.shards.outputs.matrix }}'" in audit_step
+    assert 'AXIOM_ENCODE_WAIVER_AUDIT_WORKERS: "1"' in audit_step
 
 
 def write_authorization(root: Path, *, topic: str) -> None:

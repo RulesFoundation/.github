@@ -1328,6 +1328,10 @@ jobs:
       - name: Enforce validation waiver ratchet
         shell: bash
         env:
+          # The matrix already partitions the audit across 52 runners. Avoid
+          # nested process fan-out, which overloads engine subprocesses and
+          # can make otherwise stable fingerprints disagree under load.
+          AXIOM_ENCODE_WAIVER_AUDIT_WORKERS: "1"
           BOOTSTRAP_SHA256: ${{ inputs.validation-waiver-bootstrap-sha256 }}
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
