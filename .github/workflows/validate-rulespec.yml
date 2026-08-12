@@ -84,6 +84,14 @@ on:
         required: false
         type: string
         default: ""
+      allow-retired-schema-prefreeze:
+        description: >-
+          Temporary compatibility mode for rulespec-us before its reviewed
+          retired-schema freeze lands. Requires the generated guard and is
+          rejected once either protected base or head contains a freeze.
+        required: false
+        type: boolean
+        default: false
       validation-waiver-bootstrap-sha256:
         description: >-
           Exact SHA-256 of the reviewed rulespec-us PR #911 waiver file. This
@@ -776,6 +784,7 @@ jobs:
           REF_NAME: ${{ github.ref }}
           IS_FIRST_SHARD: ${{ matrix.shard == needs.shards.outputs.first }}
           RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
+          ALLOW_PREFREEZE: ${{ inputs.allow-retired-schema-prefreeze }}
           MIGRATION_AUTHORIZED: ${{ steps.migration_authorization.outputs.authorized }}
         run: |
           set -euo pipefail
@@ -886,6 +895,19 @@ jobs:
                   fail(f"module has no retired source-verification field: {module}")
 
           if os.environ["IS_FIRST_SHARD"] == "true":
+              base_raw = immutable_blob(base_ref, freeze_path, missing_ok=True)
+              prefreeze_allowed = os.environ.get("ALLOW_PREFREEZE") == "true"
+              if prefreeze_allowed:
+                  if (
+                      os.environ.get("CALLER_REPOSITORY")
+                      != "TheAxiomFoundation/rulespec-us"
+                  ):
+                      fail("pre-freeze compatibility is restricted to rulespec-us")
+                  if os.environ.get("RUN_GENERATED_GUARD") != "true":
+                      fail("pre-freeze compatibility requires the generated guard")
+                  if base_raw is not None or head_raw is not None:
+                      fail("pre-freeze compatibility cannot be used with a freeze")
+
               candidates = git(
                   "grep",
                   "-l",
@@ -916,14 +938,13 @@ jobs:
                   assert raw is not None
                   if has_retired_source_field(raw, path=module):
                       discovered.add(module)
-              if discovered != set(head):
+              if discovered != set(head) and not prefreeze_allowed:
                   fail(
                       "inventory mismatch; "
                       f"unlisted={sorted(discovered - set(head))}, "
                       f"missing={sorted(set(head) - discovered)}"
                   )
 
-              base_raw = immutable_blob(base_ref, freeze_path, missing_ok=True)
               base = (
                   inventory(base_raw, label="protected-base freeze")
                   if base_raw is not None
