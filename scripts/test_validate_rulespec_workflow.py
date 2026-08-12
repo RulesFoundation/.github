@@ -51,6 +51,17 @@ def test_retired_schema_freeze_classifies_only_plural_citations() -> None:
     assert "upstream_source_check" not in freeze_step
 
 
+def test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Enforce validation waiver ratchet")
+    end = workflow.index("      - name: Reject manual RuleSpec changes")
+    audit_step = workflow[start:end]
+
+    assert "matrix.shard == needs.shards.outputs.first" not in audit_step
+    assert '--partition-key "${{ matrix.shard }}"' in audit_step
+    assert "--partition-keys-json '${{ needs.shards.outputs.matrix }}'" in audit_step
+
+
 def write_authorization(root: Path, *, topic: str) -> None:
     path = root / ".axiom/reviewed-migrations.json"
     path.parent.mkdir(parents=True, exist_ok=True)

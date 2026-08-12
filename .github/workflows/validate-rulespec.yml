@@ -1305,7 +1305,6 @@ jobs:
           fi
 
       - name: Enforce validation waiver ratchet
-        if: ${{ matrix.shard == needs.shards.outputs.first }}
         shell: bash
         env:
           BOOTSTRAP_SHA256: ${{ inputs.validation-waiver-bootstrap-sha256 }}
@@ -1404,6 +1403,8 @@ jobs:
             --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
             --protected-base "$protected_base" \
             --changed-paths "$changed_paths" \
+            --partition-key "${{ matrix.shard }}" \
+            --partition-keys-json '${{ needs.shards.outputs.matrix }}' \
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
 
       - name: Reject manual RuleSpec changes
