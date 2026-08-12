@@ -51,6 +51,19 @@ def test_retired_schema_freeze_classifies_only_plural_citations() -> None:
     assert "upstream_source_check" not in freeze_step
 
 
+def test_retired_schema_prefreeze_bridge_is_fail_closed() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Verify immutable retired-schema freeze")
+    end = workflow.index("      - name: Fetch pinned signed corpus release object")
+    freeze_step = workflow[start:end]
+
+    assert "allow-retired-schema-prefreeze" in workflow
+    assert 'default: false' in workflow
+    assert "pre-freeze compatibility is restricted to rulespec-us" in freeze_step
+    assert "pre-freeze compatibility requires the generated guard" in freeze_step
+    assert "pre-freeze compatibility cannot be used with a freeze" in freeze_step
+
+
 def test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix() -> None:
     workflow = WORKFLOW.read_text()
     start = workflow.index("      - name: Enforce validation waiver ratchet")
