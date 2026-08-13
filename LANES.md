@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-13 — Merge pull request #1287 from TheAxiomFoundation/b1/rate-tables-99b | 79 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-13 — Merge pull request #1288 from TheAxiomFoundation/b1/rate-tables-99c | 79 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-13 — Merge pull request #15 from TheAxiomFoundation/d2/wave-1-bu-sections | 2 | dk-rulespec-2026-08-07 | 19dfdf2ee7b48fef71603b1120a9f538ff3c13f4 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-12 — Merge pull request #265 from TheAxiomFoundation/enc/uk-county-durham-ctr | 0 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
