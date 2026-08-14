@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-14 — Merge pull request #1293 from TheAxiomFoundation/b1/schedule-compositions-b2 | 80 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-14 — Merge pull request #1292 from TheAxiomFoundation/b1/schedule-compositions-b3 | 80 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-14 — Merge pull request #16 from TheAxiomFoundation/d3/couple-witness-surface | 2 | dk-rulespec-2026-08-07 | 19dfdf2ee7b48fef71603b1120a9f538ff3c13f4 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-12 — Merge pull request #265 from TheAxiomFoundation/enc/uk-county-durham-ctr | 2 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-01 — Merge pull request #33 from TheAxiomFoundation/ci/encode-ref-1338 | 11 | de-rulespec-2026-07-21 | 226be976c12e268e7b319fcfa5ae66a4de97f85b | success |
