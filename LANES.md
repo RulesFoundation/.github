@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-15 — Register complete encoder 0.2.1683 waiver audit (#1297) | 83 | — | 3869d66d009f52258be35901edbef370e65a399c | cancelled |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-15 — Register complete encoder 0.2.1683 waiver audit (#1297) | 84 | — | 3869d66d009f52258be35901edbef370e65a399c | cancelled |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-15 — Merge pull request #36 from TheAxiomFoundation/signed/de-statute-rbeg-2021-8 | 11 | de-rulespec-2026-07-21 | 29b30fb7855c7306d9ead9ddba020dea40f938cc | success |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-15 — Merge pull request #17 from TheAxiomFoundation/d2/guard-on | 1 | dk-rulespec-2026-08-07 | 19dfdf2ee7b48fef71603b1120a9f538ff3c13f4 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-12 — Merge pull request #265 from TheAxiomFoundation/enc/uk-county-durham-ctr | 2 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
