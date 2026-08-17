@@ -4,8 +4,8 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-17 — Merge pull request #1300 from TheAxiomFoundation/b1/incidence-flags | 80 | — | 3869d66d009f52258be35901edbef370e65a399c | in_progress |
-| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-15 — Merge pull request #36 from TheAxiomFoundation/signed/de-statute-rbeg-2021-8 | 11 | de-rulespec-2026-07-21 | 29b30fb7855c7306d9ead9ddba020dea40f938cc | success |
+| [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-17 — Merge pull request #37 from TheAxiomFoundation/ci/encode-ref-1691 | 11 | de-rulespec-2026-07-21 | 07136083bbc3954df45e998b0ef61f27cfe41635 | queued |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-17 — Merge pull request #1300 from TheAxiomFoundation/b1/incidence-flags | 82 | — | 3869d66d009f52258be35901edbef370e65a399c | cancelled |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-15 — Merge pull request #17 from TheAxiomFoundation/d2/guard-on | 1 | dk-rulespec-2026-08-07 | 19dfdf2ee7b48fef71603b1120a9f538ff3c13f4 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-12 — Merge pull request #265 from TheAxiomFoundation/enc/uk-county-durham-ctr | 2 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
