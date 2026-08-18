@@ -54,6 +54,14 @@ on:
         required: false
         type: string
         default: "statutes regulations policies"
+      validation-workers:
+        description: >-
+          Number of isolated validator processes to run concurrently inside
+          each shard. Values must be between 1 and 4; the default preserves
+          the historical single-process behavior.
+        required: false
+        type: number
+        default: 1
       run-pytest:
         description: Whether to run pytest when the repository has a tests directory.
         required: false
@@ -1653,6 +1661,7 @@ jobs:
         shell: bash
         env:
           VALIDATE_ROOTS: ${{ steps.resolve_roots.outputs.roots }}
+          VALIDATION_WORKERS: ${{ inputs.validation-workers }}
           AXIOM_RULESPEC_REPO_ROOTS: ${{ github.workspace }}:${{ github.workspace }}/_axiom/rulespec-us
           AXIOM_CORPUS_ARTIFACT_ROOT: ${{ github.workspace }}/data/corpus
           AXIOM_CORPUS_REPO: ${{ github.workspace }}/_axiom/axiom-corpus
@@ -1702,18 +1711,68 @@ jobs:
             exit 0
           fi
 
-          # One invocation for all files: validation reuses one process and
-          # one registry load instead of paying both per file. Failed files
-          # are listed in the command's own summary output.
-          /opt/axiom-verification/axiom-encode-signing-supervisor \
-            --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
-            --trusted-python-runtime-root /opt/axiom-verification/python \
-            --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
-            --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
-            -- /opt/axiom-verification/axiom-encode validate "${selected[@]}" \
-            --skip-reviewers \
-            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
-            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
+          if ! [[ "$VALIDATION_WORKERS" =~ ^[1-4]$ ]]; then
+            echo "validation-workers must be an integer between 1 and 4" >&2
+            exit 1
+          fi
+          worker_count="$VALIDATION_WORKERS"
+          if [ "$worker_count" -gt "${#selected[@]}" ]; then
+            worker_count="${#selected[@]}"
+          fi
+
+          run_validation() {
+            local log_path="$1"
+            shift
+            /opt/axiom-verification/axiom-encode-signing-supervisor \
+              --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
+              --trusted-python-runtime-root /opt/axiom-verification/python \
+              --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
+              --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
+              -- /opt/axiom-verification/axiom-encode validate "$@" \
+              --skip-reviewers \
+              --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
+              --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine" \
+              > "$log_path" 2>&1
+          }
+
+          if [ "$worker_count" -eq 1 ]; then
+            log_path="$RUNNER_TEMP/rulespec-validation-0.log"
+            status=0
+            run_validation "$log_path" "${selected[@]}" || status=$?
+            cat "$log_path"
+            exit "$status"
+          fi
+
+          chunk_dir="$RUNNER_TEMP/rulespec-validation-chunks"
+          mkdir -p "$chunk_dir"
+          for ((worker = 0; worker < worker_count; worker++)); do
+            : > "$chunk_dir/$worker.txt"
+          done
+          for ((index = 0; index < ${#selected[@]}; index++)); do
+            printf '%s\n' "${selected[$index]}" \
+              >> "$chunk_dir/$((index % worker_count)).txt"
+          done
+
+          pids=()
+          logs=()
+          for ((worker = 0; worker < worker_count; worker++)); do
+            mapfile -t chunk < "$chunk_dir/$worker.txt"
+            log_path="$RUNNER_TEMP/rulespec-validation-$worker.log"
+            logs+=("$log_path")
+            run_validation "$log_path" "${chunk[@]}" &
+            pids+=("$!")
+          done
+
+          status=0
+          for pid in "${pids[@]}"; do
+            if ! wait "$pid"; then
+              status=1
+            fi
+          done
+          for log_path in "${logs[@]}"; do
+            cat "$log_path"
+          done
+          exit "$status"
 
       - name: Execute RuleSpec companion tests
         shell: bash
