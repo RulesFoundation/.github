@@ -76,6 +76,21 @@ def test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix() -> 
     assert 'AXIOM_ENCODE_WAIVER_AUDIT_WORKERS: "1"' in audit_step
 
 
+def test_parallel_validation_workers_are_bounded_and_fail_closed() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Validate RuleSpec YAML")
+    end = workflow.index("      - name: Execute RuleSpec companion tests")
+    validate_step = workflow[start:end]
+
+    assert "validation-workers:" in workflow
+    assert "default: 1" in workflow
+    assert '[[ "$VALIDATION_WORKERS" =~ ^[1-4]$ ]]' in validate_step
+    assert 'if ! wait "$pid"; then' in validate_step
+    assert 'status=1' in validate_step
+    assert 'for log_path in "${logs[@]}"; do' in validate_step
+    assert 'exit "$status"' in validate_step
+
+
 def write_authorization(root: Path, *, topic: str) -> None:
     path = root / ".axiom/reviewed-migrations.json"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -198,6 +213,7 @@ def test_conflicted_merge_is_rejected() -> None:
 
 
 def main() -> None:
+    test_parallel_validation_workers_are_bounded_and_fail_closed()
     temp, root, base, topic = fixture()
     try:
         ordinary = run_authorization(
