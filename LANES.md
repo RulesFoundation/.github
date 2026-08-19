@@ -4,8 +4,8 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-18 — Merge pull request #40 from TheAxiomFoundation/axiom/signed-backfill-dk-32165921924-1 | 1 | dk-rulespec-2026-08-07 | a249d1da92a4d97e2bfa09be1a76592f278b71eb | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-18 — Approve encoder 0.2.1690 unwaived validation census (#1308) | 83 | — | 3869d66d009f52258be35901edbef370e65a399c | success |
+| [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-19 — Merge pull request #45 from TheAxiomFoundation/axiom/signed-backfill-dk-32198868240-1 | 1 | dk-rulespec-2026-08-07 | a4599841fa86d608236923c759558d1f21be9d09 | success |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-18 — Restore protected signed corpus toolchain (#1279) | 83 | us-rulespec-2026-08-08-obbb-alien-snap | ${{ | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-17 — Merge pull request #39 from TheAxiomFoundation/ci/encode-ref-1694 | 11 | de-rulespec-2026-07-21 | 7b17413dc9833dbb59c1faa67715488087d31085 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-12 — Merge pull request #265 from TheAxiomFoundation/enc/uk-county-durham-ctr | 2 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
