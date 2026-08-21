@@ -4,10 +4,11 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
+| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-08-21 — Merge pull request #118 from TheAxiomFoundation/couple-pipeline-93 | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-20 — Merge pull request #43 from TheAxiomFoundation/docs/encode-before-filing-rule | 11 | de-rulespec-2026-07-21 | 5c8e16891b39d400269ebd49d0ad3f88f77e9ec1 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-20 — Merge pull request #268 from TheAxiomFoundation/enc/uk-wirral-ctr | 1 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-19 — Merge pull request #45 from TheAxiomFoundation/axiom/signed-backfill-dk-32198868240-1 | 1 | dk-rulespec-2026-08-07 | a4599841fa86d608236923c759558d1f21be9d09 | success |
-| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-18 — Restore protected signed corpus toolchain (#1279) | 84 | us-rulespec-2026-08-08-obbb-alien-snap | ${{ | failure |
+| [us](https://github.com/TheAxiomFoundation/rulespec-us) | 2026-08-18 — Restore protected signed corpus toolchain (#1279) | 83 | us-rulespec-2026-08-08-obbb-alien-snap | ${{ | failure |
 | [nz](https://github.com/TheAxiomFoundation/rulespec-nz) | 2026-08-01 — Merge pull request #109 from TheAxiomFoundation/docs/md-audit-rulespec-nz | 3 | nz-rulespec-2026-07-25 | a9987a4bc6a58e3f0407972f2e5726b7092b9c4b | success |
 | [ug](https://github.com/TheAxiomFoundation/rulespec-ug) | 2026-08-01 — Merge pull request #20 from TheAxiomFoundation/docs/md-audit-rulespec-ug | 2 | ug-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ng](https://github.com/TheAxiomFoundation/rulespec-ng) | 2026-08-01 — Merge pull request #15 from TheAxiomFoundation/docs/md-audit-rulespec-ng | 0 | ng-rulespec-2026-07-22 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
@@ -16,7 +17,6 @@
 | [et](https://github.com/TheAxiomFoundation/rulespec-et) | 2026-07-24 — Merge pull request #15 from TheAxiomFoundation/land/lane-verified-dir-1021-2024 | 1 | et-rulespec-2026-07-12 | b9d376684cfb5e86202daa3451b8fc716703ed19 | failure |
 | [rw](https://github.com/TheAxiomFoundation/rulespec-rw) | 2026-07-23 — Merge pull request #16 from TheAxiomFoundation/repair/cbhi-oracle-pending | 0 | rw-rulespec-2026-07-16 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [ca](https://github.com/TheAxiomFoundation/rulespec-ca) | 2026-07-23 — Merge pull request #22 from TheAxiomFoundation/ci/keyring-validate-pins | 1 | ca-rulespec-2026-07-21-oracle-complete-v2 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
-| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-07-23 — Merge pull request #117 from TheAxiomFoundation/ci/keyring-validate-pins | 1 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [tz](https://github.com/TheAxiomFoundation/rulespec-tz) | 2026-07-22 — Merge pull request #26 from TheAxiomFoundation/ci/reusable-caller-keyring | 9 | tz-rulespec-2026-07-21 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 
 <!-- curated:start -->
