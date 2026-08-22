@@ -4,7 +4,7 @@
 
 | Lane | Last main commit | Open PRs | Corpus release | Encoder ref | Repository Checks |
 | --- | --- | ---: | --- | --- | --- |
-| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-08-21 — Merge pull request #118 from TheAxiomFoundation/couple-pipeline-93 | 0 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
+| [be](https://github.com/TheAxiomFoundation/rulespec-be) | 2026-08-22 — Merge pull request #123 from TheAxiomFoundation/ledger/unemployment | 1 | be-rulespec-2026-07-10 | b9d376684cfb5e86202daa3451b8fc716703ed19 | success |
 | [de](https://github.com/TheAxiomFoundation/rulespec-de) | 2026-08-20 — Merge pull request #43 from TheAxiomFoundation/docs/encode-before-filing-rule | 11 | de-rulespec-2026-07-21 | 5c8e16891b39d400269ebd49d0ad3f88f77e9ec1 | success |
 | [uk](https://github.com/TheAxiomFoundation/rulespec-uk) | 2026-08-20 — Merge pull request #268 from TheAxiomFoundation/enc/uk-wirral-ctr | 1 | uk-rulespec-2026-08-10 | c326d1ac0acdb557f047a3054160b19dd72602fa | success |
 | [dk](https://github.com/TheAxiomFoundation/rulespec-dk) | 2026-08-19 — Merge pull request #45 from TheAxiomFoundation/axiom/signed-backfill-dk-32198868240-1 | 1 | dk-rulespec-2026-08-07 | a4599841fa86d608236923c759558d1f21be9d09 | success |
