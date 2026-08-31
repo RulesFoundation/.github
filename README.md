@@ -95,7 +95,7 @@ closed. All other new or broadened waivers are rejected; entries may otherwise
 only be removed.
 
 This draft is pinned to reviewed core candidate
-`ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21` (`axiom-encode` `0.2.1752`), stacked
+`10accbfb2a671efc6bd2beb6a23db953d259d8c2` (`axiom-encode` `0.2.1752`), stacked
 after optional-inventory PR #1566. Do not merge or roll out this workflow until
 that core is on the protected default branch under its final immutable SHA and
 this pin has been reverified. The workflow freezes the event base and head to

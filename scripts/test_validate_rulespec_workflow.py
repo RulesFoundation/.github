@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/validate-rulespec.yml"
 RETIRED = "1" * 64
 WAIVER = "2" * 64
-COMPATIBLE_AXIOM_ENCODE_SHA = "ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21"
+COMPATIBLE_AXIOM_ENCODE_SHA = "10accbfb2a671efc6bd2beb6a23db953d259d8c2"
 
 
 def git(root: Path, *args: str) -> str:

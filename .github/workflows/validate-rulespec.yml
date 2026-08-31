@@ -662,7 +662,7 @@ jobs:
         shell: bash
         env:
           AXIOM_ENCODE_SHA: ${{ inputs.axiom-encode-ref }}
-          COMPATIBLE_AXIOM_ENCODE_SHA: ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21
+          COMPATIBLE_AXIOM_ENCODE_SHA: 10accbfb2a671efc6bd2beb6a23db953d259d8c2
           AXIOM_RULES_ENGINE_SHA: ${{ inputs.axiom-rules-engine-ref }}
           AXIOM_CORPUS_SHA: ${{ inputs.axiom-corpus-ref }}
           RULESPEC_US_SHA: ${{ inputs.rulespec-us-ref }}

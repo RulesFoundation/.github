@@ -7,7 +7,7 @@
 - A fresh live remote-ref and `gh pr view 107` check succeeded on 2026-08-31. Live `origin/main` is `e973d1563cdb22c09c82f7fd0a262fb642b2750c`; PR #107 remains open, draft, clean/mergeable, and green at the prior published head `3e7976cc2aaab4e3e712285814e335493187a950` while this rebased follow-up is finalized locally.
 - Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its useful workflow/test and handoff bytes were preserved; its generated Python cache was removed and never committed.
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
-- The workflow is reconciled to axiom-encode core candidate `ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21`, version `0.2.1752`, stacked directly after optional-inventory PR #1566. This exact candidate is reviewable but not yet on the protected default branch.
+- The workflow is reconciled to axiom-encode core candidate `10accbfb2a671efc6bd2beb6a23db953d259d8c2`, version `0.2.1752`, stacked directly after optional-inventory PR #1566. This exact candidate is reviewable but not yet on the protected default branch.
 - Rollout remains **BLOCKED** until #1566 and the reviewed compatible core land, the workflow's exact core pin is reverified against the final protected-branch SHA, and callers repin both artifacts together.
 - This run uses the user-specified normal Standard service tier, `gpt-5.6-sol`, ultra reasoning, and no `--fast`.
 
@@ -43,7 +43,7 @@
 - Replaced newline path transport with bounded NUL-v1 bytes and the mandatory `--changed-paths-format nul-v1` core interface.
 - Froze event base/head refs to exact commits after removing every ambient `GIT_*` variable and restoring a minimal read-only Git environment; materialized base and head waiver/toolchain evidence only from bounded exact `100644 blob` objects; compared live head bytes with the frozen head; and added poisoned-routing, missing, corrupt-object, executable, symlink, and ref-movement regressions.
 - Kept pending creation at the exact waiver/toolchain pair. Activation now requires the pair, consumed module, and exactly one encoding-manifest path inline, while the pinned core authenticates the signed v5 manifest and exact generated-file closure. Both pending-only and active-plus-pending forms remain supported; waiver/toolchain-only activation now fails.
-- Pinned this workflow candidate to core `ef7ecd0c...` / `0.2.1752`, retained the exact authorized pre-toolchain PR #911 bootstrap outside the core transition path, and passed the updated extracted-source workflow self-test, legacy coverage self-test, changed-workflow `actionlint`, and Ruff lint.
+- Pinned this workflow candidate to core `10accbfb...` / `0.2.1752`, retained the exact authorized pre-toolchain PR #911 bootstrap outside the core transition path, and passed the updated extracted-source workflow self-test, legacy coverage self-test, changed-workflow `actionlint`, and Ruff lint.
 
 ## Next
 
