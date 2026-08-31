@@ -3,12 +3,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github/workflows/validate-rulespec.yml"
@@ -74,6 +77,404 @@ def test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix() -> 
     assert '--partition-key "${{ matrix.shard }}"' in audit_step
     assert "--partition-keys-json '${{ needs.shards.outputs.matrix }}'" in audit_step
     assert 'AXIOM_ENCODE_WAIVER_AUDIT_WORKERS: "1"' in audit_step
+    assert '--protected-base-toolchain "$protected_toolchain"' in audit_step
+
+
+def test_validation_waiver_base_evidence_uses_one_event_ref() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Enforce validation waiver ratchet")
+    end = workflow.index("      - name: Reject manual RuleSpec changes")
+    audit_step = workflow[start:end]
+
+    assert 'base_ref="${{ github.event.pull_request.base.sha }}"' in audit_step
+    assert 'git show "$base_ref:known-validation-gaps.yaml"' in audit_step
+    assert 'git show "$base_ref:.axiom/toolchain.toml"' in audit_step
+    assert '"$base_ref" "$GITHUB_SHA"' in audit_step
+
+
+def validation_waiver_ratchet_source() -> str:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("# validation-waiver-ratchet-start")
+    end = workflow.index("# validation-waiver-ratchet-end")
+    block = textwrap.dedent(workflow[start:end].split("\n", 1)[1])
+    marker = (
+        "python - \\\n"
+        '  "$protected_base" \\\n'
+        "  known-validation-gaps.yaml \\\n"
+        '  "$changed_paths" \\\n'
+        '  "$protected_toolchain" \\\n'
+        "  .axiom/toolchain.toml <<'PY'\n"
+    )
+    assert block.startswith(marker)
+    source = block[len(marker) :]
+    source = source.rsplit("\nPY", 1)[0]
+    return textwrap.dedent(source)
+
+
+def run_validation_waiver_ratchet(
+    root: Path,
+    *,
+    base: dict,
+    head: dict,
+    changed: list[str],
+    base_toolchain: bytes | None = None,
+    head_toolchain: bytes | None = None,
+    base_waiver: bytes | None = None,
+    head_waiver: bytes | None = None,
+    omit_base_toolchain: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    base_path = root / "base-waivers.yaml"
+    head_path = root / "head-waivers.yaml"
+    changed_path = root / "changed-paths.txt"
+    base_toolchain_path = root / "base-toolchain.toml"
+    head_toolchain_path = root / "head-toolchain.toml"
+    base_path.write_bytes(
+        base_waiver
+        if base_waiver is not None
+        else yaml.safe_dump(json.loads(json.dumps(base)), sort_keys=True).encode()
+    )
+    head_path.write_bytes(
+        head_waiver
+        if head_waiver is not None
+        else yaml.safe_dump(json.loads(json.dumps(head)), sort_keys=True).encode()
+    )
+    changed_path.write_text("\n".join(changed) + "\n")
+    if omit_base_toolchain:
+        base_toolchain_path.unlink(missing_ok=True)
+    else:
+        base_toolchain_path.write_bytes(
+            base_toolchain or toolchain_bytes(base_path.read_bytes())
+        )
+    head_toolchain_path.write_bytes(
+        head_toolchain or toolchain_bytes(head_path.read_bytes())
+    )
+    return subprocess.run(
+        [
+            "python",
+            "-c",
+            validation_waiver_ratchet_source(),
+            str(base_path),
+            str(head_path),
+            str(changed_path),
+            str(base_toolchain_path),
+            str(head_toolchain_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+
+def waiver_metadata(seed: str) -> dict[str, str]:
+    return {
+        "fingerprint": f"sha256:{seed * 64}",
+        "owner": "@waiver-reviewer",
+        "issue": "https://github.com/TheAxiomFoundation/axiom-encode/issues/1558",
+        "expires": "2026-10-01",
+    }
+
+
+def toolchain_bytes(
+    waiver_bytes: bytes,
+    *,
+    release: str = "test-release",
+    corpus_digest: str = "a" * 64,
+) -> bytes:
+    return (
+        "[toolchain]\n"
+        f'axiom_corpus_release = "{release}"\n'
+        f'axiom_corpus_release_content_sha256 = "{corpus_digest}"\n'
+        f'validation_waiver_set_sha256 = "{hashlib.sha256(waiver_bytes).hexdigest()}"\n'
+    ).encode()
+
+
+def test_validation_waiver_ratchet_admits_one_exactly_scoped_pending() -> None:
+    active = waiver_metadata("a")
+    pending = waiver_metadata("b")
+    base = {"validate_failures": {"us/statutes/1.yaml": {"active": active}}}
+    head = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": pending}
+        }
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        accepted = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=head,
+            changed=["known-validation-gaps.yaml", ".axiom/toolchain.toml"],
+        )
+        assert accepted.returncode == 0, accepted.stderr
+
+        third_path = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=head,
+            changed=[
+                "known-validation-gaps.yaml",
+                ".axiom/toolchain.toml",
+                "README.md",
+            ],
+        )
+        assert third_path.returncode != 0
+        assert "must change exactly" in third_path.stderr
+
+
+def test_validation_waiver_ratchet_binds_exact_toolchain_and_waiver_bytes() -> None:
+    active = waiver_metadata("a")
+    pending = waiver_metadata("b")
+    base = {"validate_failures": {"us/statutes/1.yaml": {"active": active}}}
+    head = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": pending}
+        }
+    }
+    changed = ["known-validation-gaps.yaml", ".axiom/toolchain.toml"]
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        base_bytes = yaml.safe_dump(base, sort_keys=True).encode()
+        head_bytes = yaml.safe_dump(head, sort_keys=True).encode()
+
+        wrong_digest = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            head_toolchain=toolchain_bytes(b"not the head waiver bytes"),
+        )
+        assert wrong_digest.returncode != 0
+        assert "does not bind the exact head waiver bytes" in wrong_digest.stderr
+
+        stale_base = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            base_toolchain=toolchain_bytes(b"stale protected-base bytes"),
+        )
+        assert stale_base.returncode != 0
+        assert "StaleBaseEvidence" in stale_base.stderr
+
+        missing_base = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            omit_base_toolchain=True,
+        )
+        assert missing_base.returncode != 0
+        assert "cannot read protected-base .axiom/toolchain.toml" in missing_base.stderr
+
+        extra_key = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            head_toolchain=toolchain_bytes(head_bytes) + b'unexpected = "value"\n',
+        )
+        assert extra_key.returncode != 0
+        assert "must contain exactly" in extra_key.stderr
+
+        semantic_change = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            base_toolchain=toolchain_bytes(base_bytes),
+            head_toolchain=toolchain_bytes(head_bytes, release="other-release"),
+        )
+        assert semantic_change.returncode != 0
+        assert "may not change corpus release metadata" in semantic_change.stderr
+
+        byte_change = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            head_toolchain=toolchain_bytes(head_bytes) + b"# unrelated byte change\n",
+        )
+        assert byte_change.returncode != 0
+        assert "bytes may change only" in byte_change.stderr
+
+
+def test_validation_waiver_ratchet_rejects_extra_waiver_keys() -> None:
+    active = waiver_metadata("a")
+    pending = waiver_metadata("b")
+    base = {"validate_failures": {"us/statutes/1.yaml": {"active": active}}}
+    head = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": pending}
+        }
+    }
+    changed = ["known-validation-gaps.yaml", ".axiom/toolchain.toml"]
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        extra_root = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head={
+                "validate_failures": {
+                    "us/statutes/1.yaml": {"active": active, "pending": pending}
+                },
+                "unexpected": {},
+            },
+            changed=changed,
+        )
+        assert extra_root.returncode != 0
+        assert "must contain exactly validate_failures" in extra_root.stderr
+
+        extra_metadata = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head={
+                "validate_failures": {
+                    "us/statutes/1.yaml": {
+                        "active": active,
+                        "pending": {**pending, "unexpected": "value"},
+                    }
+                }
+            },
+            changed=changed,
+        )
+        assert extra_metadata.returncode != 0
+        assert "must contain exactly" in extra_metadata.stderr
+
+        duplicate_root = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            head_waiver=(
+                b"validate_failures: {}\n"
+                b"validate_failures: {}\n"
+            ),
+        )
+        assert duplicate_root.returncode != 0
+        assert "found duplicate key" in duplicate_root.stderr
+
+        alias_metadata = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head=head,
+            changed=changed,
+            head_waiver=(
+                "validate_failures:\n"
+                "  us/statutes/1.yaml:\n"
+                "    active: &approval\n"
+                "      expires: '2026-10-01'\n"
+                "      fingerprint: sha256:" + "a" * 64 + "\n"
+                "      issue: https://github.com/TheAxiomFoundation/axiom-encode/issues/1558\n"
+                "      owner: '@waiver-reviewer'\n"
+                "    pending: *approval\n"
+            ).encode(),
+        )
+        assert alias_metadata.returncode != 0
+        assert "anchors and aliases are not allowed" in alias_metadata.stderr
+
+
+def test_validation_waiver_ratchet_rejects_pending_batches_and_direct_active() -> None:
+    active = waiver_metadata("a")
+    pending = waiver_metadata("b")
+    base = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active},
+            "us/statutes/2.yaml": {"active": active},
+        }
+    }
+    batched = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": pending},
+            "us/statutes/2.yaml": {"active": active, "pending": pending},
+        }
+    }
+    direct = {
+        "validate_failures": {"us/statutes/1.yaml": {"active": pending}}
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        batched_result = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=batched,
+            changed=["known-validation-gaps.yaml", ".axiom/toolchain.toml"],
+        )
+        assert batched_result.returncode != 0
+        assert "exactly one" in batched_result.stderr
+
+        direct_result = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=direct,
+            changed=["known-validation-gaps.yaml", ".axiom/toolchain.toml"],
+        )
+        assert direct_result.returncode != 0
+        assert "may only shrink" in direct_result.stderr
+
+
+def test_validation_waiver_ratchet_rejects_pending_replacement_and_retention() -> None:
+    active = waiver_metadata("a")
+    old_pending = waiver_metadata("b")
+    new_pending = waiver_metadata("c")
+    base = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": old_pending}
+        }
+    }
+    changed = ["known-validation-gaps.yaml", ".axiom/toolchain.toml"]
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        replacement = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head={
+                "validate_failures": {
+                    "us/statutes/1.yaml": {
+                        "active": active,
+                        "pending": new_pending,
+                    }
+                }
+            },
+            changed=changed,
+        )
+        assert replacement.returncode != 0
+        assert "may only shrink" in replacement.stderr
+
+        retained = run_validation_waiver_ratchet(
+            root,
+            base=base,
+            head={
+                "validate_failures": {
+                    "us/statutes/1.yaml": {
+                        "active": old_pending,
+                        "pending": old_pending,
+                    }
+                }
+            },
+            changed=changed,
+        )
+        assert retained.returncode != 0
+        assert "active-with-pending" in retained.stderr
+
+
+def test_validation_waiver_ratchet_preserves_exact_pending_consumption() -> None:
+    active = waiver_metadata("a")
+    pending = waiver_metadata("b")
+    base = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": active, "pending": pending}
+        }
+    }
+    head = {"validate_failures": {"us/statutes/1.yaml": {"active": pending}}}
+    with tempfile.TemporaryDirectory() as directory:
+        result = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=head,
+            changed=[
+                "known-validation-gaps.yaml",
+                ".axiom/toolchain.toml",
+                "us/statutes/1.yaml",
+            ],
+        )
+    assert result.returncode == 0, result.stderr
 
 
 def test_parallel_validation_workers_are_bounded_and_fail_closed() -> None:
@@ -213,6 +614,14 @@ def test_conflicted_merge_is_rejected() -> None:
 
 
 def main() -> None:
+    test_validation_waiver_audit_is_exhaustively_partitioned_across_matrix()
+    test_validation_waiver_base_evidence_uses_one_event_ref()
+    test_validation_waiver_ratchet_admits_one_exactly_scoped_pending()
+    test_validation_waiver_ratchet_binds_exact_toolchain_and_waiver_bytes()
+    test_validation_waiver_ratchet_rejects_extra_waiver_keys()
+    test_validation_waiver_ratchet_rejects_pending_batches_and_direct_active()
+    test_validation_waiver_ratchet_rejects_pending_replacement_and_retention()
+    test_validation_waiver_ratchet_preserves_exact_pending_consumption()
     test_parallel_validation_workers_are_bounded_and_fail_closed()
     temp, root, base, topic = fixture()
     try:

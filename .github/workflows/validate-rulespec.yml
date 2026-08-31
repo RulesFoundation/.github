@@ -1357,6 +1357,7 @@ jobs:
             base_ref="HEAD~1"
           fi
           protected_base="$RUNNER_TEMP/protected-known-validation-gaps.yaml"
+          protected_toolchain="$RUNNER_TEMP/protected-toolchain.toml"
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
           # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
@@ -1385,27 +1386,201 @@ jobs:
           # waiver-bootstrap-guard-end
           git diff --name-only -z --no-renames --diff-filter=ACMRTD \
             "$base_ref" "$GITHUB_SHA" | LC_ALL=C tr '\0' '\n' > "$changed_paths"
-          python - "$protected_base" known-validation-gaps.yaml <<'PY'
+          toolchain_args=()
+          if git show "$base_ref:.axiom/toolchain.toml" > "$protected_toolchain"; then
+            toolchain_args=(--protected-base-toolchain "$protected_toolchain")
+          else
+            rm -f "$protected_toolchain"
+          fi
+          # validation-waiver-ratchet-start
+          python - \
+            "$protected_base" \
+            known-validation-gaps.yaml \
+            "$changed_paths" \
+            "$protected_toolchain" \
+            .axiom/toolchain.toml <<'PY'
+          import hashlib
+          import re
           import sys
+          import tomllib
           from pathlib import Path
 
           import yaml
+          from yaml.constructor import ConstructorError
+          from yaml.events import AliasEvent, NodeEvent
 
-          base_path, head_path = map(Path, sys.argv[1:])
-          base = yaml.safe_load(base_path.read_bytes())
-          head = yaml.safe_load(head_path.read_bytes())
-          base_entries = base.get("validate_failures", {}) if isinstance(base, dict) else {}
-          head_entries = head.get("validate_failures", {}) if isinstance(head, dict) else {}
-          if not isinstance(base_entries, dict) or not isinstance(head_entries, dict):
-              raise SystemExit(
-                  "ValidationWaiverRatchetSchema: validate_failures must be a mapping"
-              )
+          (
+              base_path,
+              head_path,
+              changed_path,
+              base_toolchain_path,
+              head_toolchain_path,
+          ) = map(Path, sys.argv[1:])
+          WAIVER_SECTION = "validate_failures"
+          WAIVER_STATES = {"active", "pending"}
+          METADATA_KEYS = {"fingerprint", "owner", "issue", "expires"}
+          TOOLCHAIN_KEYS = {
+              "axiom_corpus_release",
+              "axiom_corpus_release_content_sha256",
+              "validation_waiver_set_sha256",
+          }
+          SHA256_RE = re.compile(r"[0-9a-f]{64}")
+          RELEASE_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+          DIGEST_ASSIGNMENT_RE = re.compile(
+              rb"(?m)^(?P<prefix>[ \t]*validation_waiver_set_sha256[ \t]*=[ \t]*\")"
+              rb"(?P<digest>[0-9a-f]{64})"
+              rb"(?P<suffix>\"[^\r\n]*)(?P<newline>\r?\n|$)"
+          )
+
+          def fail(kind, message):
+              raise SystemExit(f"{kind}: {message}")
+
+          class UniqueKeyLoader(yaml.SafeLoader):
+              pass
+
+          def construct_unique_mapping(loader, node, deep=False):
+              mapping = {}
+              for key_node, value_node in node.value:
+                  if isinstance(key_node, yaml.ScalarNode) and key_node.value == "<<":
+                      raise ConstructorError(
+                          "while constructing a mapping",
+                          node.start_mark,
+                          "YAML merge keys are not allowed",
+                          key_node.start_mark,
+                      )
+                  key = loader.construct_object(key_node, deep=deep)
+                  try:
+                      duplicate = key in mapping
+                  except TypeError as exc:
+                      raise ConstructorError(
+                          "while constructing a mapping",
+                          node.start_mark,
+                          "found an unhashable mapping key",
+                          key_node.start_mark,
+                      ) from exc
+                  if duplicate:
+                      raise ConstructorError(
+                          "while constructing a mapping",
+                          node.start_mark,
+                          f"found duplicate key {key!r}",
+                          key_node.start_mark,
+                      )
+                  mapping[key] = loader.construct_object(value_node, deep=deep)
+              return mapping
+
+          UniqueKeyLoader.add_constructor(
+              yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+              construct_unique_mapping,
+          )
+
+          def load_waivers(path, label):
+              try:
+                  raw = path.read_bytes()
+              except OSError as exc:
+                  fail("ValidationWaiverRatchetEvidence", f"cannot read {label}: {exc}")
+              if len(raw) > 2_000_000:
+                  fail("ValidationWaiverRatchetSchema", f"{label} exceeds 2000000 bytes")
+              try:
+                  text = raw.decode("utf-8")
+                  for event in yaml.parse(text, Loader=yaml.SafeLoader):
+                      if isinstance(event, AliasEvent) or (
+                          isinstance(event, NodeEvent) and event.anchor is not None
+                      ):
+                          fail(
+                              "ValidationWaiverRatchetSchema",
+                              f"{label} YAML anchors and aliases are not allowed",
+                          )
+                  payload = yaml.load(text, Loader=UniqueKeyLoader)
+              except (UnicodeError, yaml.YAMLError) as exc:
+                  fail("ValidationWaiverRatchetSchema", f"cannot parse {label}: {exc}")
+              if not isinstance(payload, dict) or set(payload) != {WAIVER_SECTION}:
+                  fail(
+                      "ValidationWaiverRatchetSchema",
+                      f"{label} must contain exactly {WAIVER_SECTION}",
+                  )
+              entries = payload[WAIVER_SECTION]
+              if not isinstance(entries, dict):
+                  fail(
+                      "ValidationWaiverRatchetSchema",
+                      f"{label} {WAIVER_SECTION} must be a mapping",
+                  )
+              for module, states in entries.items():
+                  if not isinstance(module, str) or not module:
+                      fail(
+                          "ValidationWaiverRatchetSchema",
+                          f"{label} module keys must be non-empty strings",
+                      )
+                  if (
+                      not isinstance(states, dict)
+                      or not states
+                      or not set(states) <= WAIVER_STATES
+                  ):
+                      fail(
+                          "ValidationWaiverRatchetSchema",
+                          f"{label} {module} must contain only active and/or pending",
+                      )
+                  for state, metadata in states.items():
+                      if not isinstance(metadata, dict) or set(metadata) != METADATA_KEYS:
+                          fail(
+                              "ValidationWaiverRatchetSchema",
+                              f"{label} {module}:{state} must contain exactly "
+                              + ", ".join(sorted(METADATA_KEYS)),
+                          )
+              return raw, entries
+
+          def load_toolchain(path, label):
+              try:
+                  raw = path.read_bytes()
+              except OSError as exc:
+                  fail("ValidationWaiverRatchetEvidence", f"cannot read {label}: {exc}")
+              if len(raw) > 64 * 1024:
+                  fail("ValidationWaiverRatchetToolchain", f"{label} exceeds 65536 bytes")
+              try:
+                  payload = tomllib.loads(raw.decode("utf-8"))
+              except (UnicodeError, tomllib.TOMLDecodeError) as exc:
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      f"{label} is not valid UTF-8 TOML: {exc}",
+                  )
+              if set(payload) != {"toolchain"} or not isinstance(
+                  payload["toolchain"], dict
+              ):
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      f"{label} must contain exactly one top-level [toolchain] table",
+                  )
+              table = payload["toolchain"]
+              if set(table) != TOOLCHAIN_KEYS:
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      f"{label} [toolchain] must contain exactly: "
+                      + ", ".join(sorted(TOOLCHAIN_KEYS)),
+                  )
+              if not all(isinstance(value, str) for value in table.values()):
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      f"{label} [toolchain] values must be strings",
+                  )
+              release = table["axiom_corpus_release"]
+              if RELEASE_RE.fullmatch(release) is None or release == "current":
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      f"{label} corpus release is not canonical and immutable",
+                  )
+              for key in TOOLCHAIN_KEYS - {"axiom_corpus_release"}:
+                  if SHA256_RE.fullmatch(table[key]) is None:
+                      fail(
+                          "ValidationWaiverRatchetToolchain",
+                          f"{label} {key} must be a lowercase sha256 digest",
+                      )
+              return raw, table
+
+          base_waiver_bytes, base_entries = load_waivers(base_path, "protected base")
+          head_waiver_bytes, head_entries = load_waivers(head_path, "head")
           growth = []
+          pending_additions = []
           for module, head_states in head_entries.items():
-              base_states = base_entries.get(module)
-              if not isinstance(head_states, dict) or not isinstance(base_states, dict):
-                  growth.append(str(module))
-                  continue
+              base_states = base_entries.get(module, {})
               for state, metadata in head_states.items():
                   if base_states.get(state) == metadata:
                       continue
@@ -1413,7 +1588,15 @@ jobs:
                       # A protected-base pending approval being consumed
                       # (pending -> active) is the sanctioned transition; the
                       # supervised audit still enforces the full protocol
-                      # (exact consumption, expiry, waiver-only approvals).
+                      # (exact consumption, expiry, digest-bound approvals).
+                      if "pending" in head_states:
+                          growth.append(f"{module}:active-with-pending")
+                      continue
+                  if state == "pending":
+                      if "pending" in base_states:
+                          growth.append(f"{module}:{state}")
+                      else:
+                          pending_additions.append(f"{module}:{state}")
                       continue
                   growth.append(f"{module}:{state}")
           if growth:
@@ -1421,11 +1604,86 @@ jobs:
                   "ValidationWaiverRatchetGrowth: waivers may only shrink; "
                   "new, changed, or broadened records: " + ", ".join(sorted(growth))
               )
+          if pending_additions:
+              if len(pending_additions) != 1:
+                  raise SystemExit(
+                      "ValidationWaiverRatchetPendingBatch: exactly one new "
+                      "pending approval is permitted: "
+                      + ", ".join(sorted(pending_additions))
+                  )
+              changed = set(changed_path.read_text(encoding="utf-8").splitlines())
+              required = {
+                  "known-validation-gaps.yaml",
+                  ".axiom/toolchain.toml",
+              }
+              if changed != required:
+                  raise SystemExit(
+                      "ValidationWaiverRatchetPendingScope: a pending approval "
+                      "must change exactly known-validation-gaps.yaml and "
+                      ".axiom/toolchain.toml"
+                  )
+              base_toolchain_bytes, base_toolchain = load_toolchain(
+                  base_toolchain_path,
+                  "protected-base .axiom/toolchain.toml",
+              )
+              head_toolchain_bytes, head_toolchain = load_toolchain(
+                  head_toolchain_path,
+                  "head .axiom/toolchain.toml",
+              )
+              base_digest = hashlib.sha256(base_waiver_bytes).hexdigest()
+              head_digest = hashlib.sha256(head_waiver_bytes).hexdigest()
+              if base_toolchain["validation_waiver_set_sha256"] != base_digest:
+                  fail(
+                      "ValidationWaiverRatchetStaleBaseEvidence",
+                      "protected-base toolchain does not bind the exact "
+                      "protected-base waiver bytes",
+                  )
+              if head_toolchain["validation_waiver_set_sha256"] != head_digest:
+                  fail(
+                      "ValidationWaiverRatchetHeadDigest",
+                      "head toolchain does not bind the exact head waiver bytes",
+                  )
+              if base_digest == head_digest:
+                  fail(
+                      "ValidationWaiverRatchetPendingNoop",
+                      "a new pending approval must change the waiver bytes",
+                  )
+              immutable_keys = TOOLCHAIN_KEYS - {"validation_waiver_set_sha256"}
+              if any(base_toolchain[key] != head_toolchain[key] for key in immutable_keys):
+                  fail(
+                      "ValidationWaiverRatchetToolchainChange",
+                      "a pending approval may not change corpus release metadata",
+                  )
+              assignments = list(DIGEST_ASSIGNMENT_RE.finditer(base_toolchain_bytes))
+              if len(assignments) != 1:
+                  fail(
+                      "ValidationWaiverRatchetToolchain",
+                      "protected-base toolchain must contain exactly one canonical "
+                      "validation_waiver_set_sha256 assignment",
+                  )
+              assignment = assignments[0]
+              if assignment.group("digest").decode("ascii") != base_digest:
+                  fail(
+                      "ValidationWaiverRatchetStaleBaseEvidence",
+                      "protected-base digest assignment does not match its parsed value",
+                  )
+              expected_head_toolchain = (
+                  base_toolchain_bytes[: assignment.start("digest")]
+                  + head_digest.encode("ascii")
+                  + base_toolchain_bytes[assignment.end("digest") :]
+              )
+              if head_toolchain_bytes != expected_head_toolchain:
+                  fail(
+                      "ValidationWaiverRatchetToolchainBytes",
+                      "head toolchain bytes may change only the canonical "
+                      "validation_waiver_set_sha256 value",
+                  )
           print(
-              "Validation waiver ratchet is decrement-only: "
+              "Validation waiver ratchet accepted: "
               f"{len(base_entries)} base module(s) -> {len(head_entries)} head module(s)."
           )
           PY
+          # validation-waiver-ratchet-end
           /opt/axiom-verification/axiom-encode-signing-supervisor \
             --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
             --trusted-python-runtime-root /opt/axiom-verification/python \
@@ -1435,6 +1693,7 @@ jobs:
             --root "$GITHUB_WORKSPACE" \
             --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
             --protected-base "$protected_base" \
+            "${toolchain_args[@]}" \
             --changed-paths "$changed_paths" \
             --partition-key "${{ matrix.shard }}" \
             --partition-keys-json '${{ needs.shards.outputs.matrix }}' \

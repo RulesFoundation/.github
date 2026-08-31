@@ -77,8 +77,15 @@ its own verification roots.
 
 `known-validation-gaps.yaml` is mandatory and its exact bytes must hash to
 `validation_waiver_set_sha256`. On a pull request, the encoder's typed waiver
-audit compares it with the protected base revision and rejects any new or
-broadened waiver; entries may only be removed. A toolchain or caller-workflow
+audit compares it with the protected base revision. One new `pending` approval
+is permitted only in a pull request that changes exactly
+`known-validation-gaps.yaml` and `.axiom/toolchain.toml`; both revisions must
+bind their exact waiver bytes, and the digest value must be the toolchain's only
+byte change. A later pull request may activate only the exact, unexpired pending
+record already present on the protected base and must consume that pending
+state. All other new or broadened waivers are rejected; entries may otherwise
+only be removed. Callers must repin this workflow and an encoder revision that
+supports `--protected-base-toolchain` together. A toolchain or caller-workflow
 change runs full RuleSpec validation so a release or waiver-set change cannot
 hide behind changed-file selection.
 
