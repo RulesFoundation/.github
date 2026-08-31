@@ -2,10 +2,10 @@
 
 ## State
 
-- Branch: `fix/1558-waiver-transition-workflow`; resumed HEAD `e94d8fd22312e785cfa334029f4086554dd3c2e1` is four commits ahead of and one commit behind the local `origin/main` snapshot `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`. The merge base remains `847217fe551238bfccfcd48c02e59edc4fe3a0e4`; the behind commit changes only `LANES.md`.
-- The served-model-attested Fable review of frozen head `585d57a111ac06a398850861b1195f1cb788d80e` returned `REQUEST_CHANGES` with five implementation blockers (F1-F5); remediation recovered from the interrupted work is in progress.
+- Branch: `fix/1558-waiver-transition-workflow`; implementation HEAD `7e1bbdcdd8da3b3992b5c372a57eb61068cd4f53` is six commits ahead of and zero behind the local `origin/main` snapshot `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is now the exact merge base.
+- The served-model-attested Fable review of frozen head `585d57a111ac06a398850861b1195f1cb788d80e` returned `REQUEST_CHANGES` with five implementation blockers (F1-F5). The inline remediation and extracted-source adversarial coverage are now committed and locally green; documentation and final verification remain.
 - A live `git fetch --all --prune --tags` was attempted first on 2026-08-31 and failed because sandbox DNS could not resolve `github.com`; `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a` is therefore the newest local remote-tracking snapshot, not a newly certified live tip.
-- Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its tracked workflow/test changes exactly match the dirty worktree, and its PR/report bytes match the untracked files; its generated Python cache is not useful work and will be removed.
+- Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its useful workflow/test and handoff bytes were preserved; its generated Python cache was removed and never committed.
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
 - The sibling axiom-encode implementation is still uncommitted; its current `cca60e84` head is progress-only and is not a compatible core pin.
 - Rollout remains **BLOCKED** until a reviewed compatible core implementation has an immutable commit SHA; no core pin will be invented or taken from uncommitted work.
@@ -27,14 +27,15 @@
 - Re-inspected the applicable `/Users/maxghenis/AGENTS.md`, repository status and instructions, exact frozen head, cached base/merge base, complete base diff, and the untracked `PR_BODY.md` and `WORKER-REPORT.md` without modifying or discarding them.
 - Read the complete `/private/tmp/fable-review-waiver-workflow-out.md` attestation and accepted F1-F5: activation needs independent inline expiry/state/scope/raw-evidence proof; creation needs exact-superset semantics; protected-base toolchain retrieval must fail closed; metadata types/expiry need inline validation; and exact regressions are required for every listed attack.
 - Re-inspected the current branch, cached upstream, merge base, four committed branch changes, exact salvage commit, dirty tracked bytes, untracked `PR_BODY.md`/`WORKER-REPORT.md`, and generated cache. No useful work needs to be guessed or discarded.
+- Committed the F1-F5 implementation and exact-source regression expansion as `7e1bbdcdd8da3b3992b5c372a57eb61068cd4f53` after the waiver workflow self-test, changed-workflow `actionlint`, Ruff, and `git diff --check` passed.
+- Added exact attacks for cross-module replacement, mixed creation/activation, isolated unrelated removals in both phases, strict/type/real/future expiry failures, activation scope, missing/corrupt/unreadable Git toolchain evidence, base/head waiver and toolchain raw-byte/digest mutations, and the exact authorized PR #911 pre-toolchain bootstrap composition.
+- Rebased all six branch commits onto `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`; the only tree difference from the pre-rebase implementation is that upstream's isolated `LANES.md` registry update is now present.
+- Completed independent inline-security and test-coverage audits with no remaining F1-F5 finding.
 
 ## Next
 
-- Finish and audit the recovered F1-F4 inline changes, including fail-closed protected-base toolchain retrieval with only the exact documented pre-migration compatibility condition.
-- Add extracted-source self-tests for every Fable F5 attack: cross-module replacement, mixed creation/activation, unrelated removals, invalid expiry values, missing/corrupt/unreadable base toolchain, digest mismatches, activation extra paths, and base/head raw-byte or digest mutations.
 - Document caller up-to-date-base/merge-queue protection, migration off the legacy pending-safe workflow, and the eventual core audit interface; make both handoff files honestly `BLOCKED` on a reviewed compatible core pin.
-- Remove generated caches; run the full workflow self-tests, changed-workflow `actionlint`, Ruff, Python compilation, all-workflow YAML parsing, and `git diff --check`; commit each coherent step and verify actual commit messages.
-- Reconcile the isolated cached `origin/main` `LANES.md` commit without losing branch work, then re-run verification.
+- Run the complete post-rebase workflow self-tests, changed-workflow `actionlint`, Ruff, Python compilation without retaining caches, all-workflow YAML parsing, and `git diff --check`; commit verification state and read back actual commit messages.
 - If every local and remote precondition is green, fetch/reconcile, push, and open or update only a draft PR; verify its actual title/body/draft/head state and do not merge.
 
 ## Known baseline-only check noise
