@@ -84,15 +84,26 @@ bind their exact waiver bytes, and the digest value must be the toolchain's only
 byte change. The new pending field may approve a module that has no existing
 waiver entry, producing a pending-only module. A later pull request may consume
 the exact, unexpired pending record into active on that same module, either
-initializing a pending-only module or replacing its existing active state. The
-pending state must be removed and every other module and state preserved. All
-other new or broadened waivers are rejected; entries may otherwise only be
-removed.
+initializing a pending-only module or replacing its existing active state. That
+consumption is valid only when one changed, surviving, signed v5 model manifest
+authenticates the consumed module and the changed paths are exactly the waiver,
+toolchain, manifest, and every changed manifest-listed applied file. The
+pending state must be removed and every other module and state preserved.
+Waiver/toolchain-only activation, unsigned or stale manifests, deletions,
+unlisted modules, unrelated paths, batches, and composite transitions fail
+closed. All other new or broadened waivers are rejected; entries may otherwise
+only be removed.
 
-Do not roll out this transition protocol until a reviewed, immutable
-`axiom-encode` commit independently re-proves the same raw protected-base
-evidence through this exact interface (all flags are required and unknown or
-missing flags must fail):
+This draft is pinned to reviewed core candidate
+`ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21` (`axiom-encode` `0.2.1752`), stacked
+after optional-inventory PR #1566. Do not merge or roll out this workflow until
+that core is on the protected default branch under its final immutable SHA and
+this pin has been reverified. The workflow freezes the event base and head to
+commit objects, materializes the protected waiver and toolchain only from exact
+bounded `100644 blob` objects, proves the checkout's head bytes match its frozen
+commit, and preserves changed paths as bounded NUL-v1 bytes. The core
+independently re-proves the same evidence through this exact interface (all
+flags are required and unknown or missing flags fail):
 
 ```text
 validation-waivers audit \
@@ -100,19 +111,23 @@ validation-waivers audit \
   --corpus-path <corpus-checkout> \
   --protected-base <raw-base-known-validation-gaps.yaml> \
   --protected-base-toolchain <raw-base-.axiom/toolchain.toml> \
-  --changed-paths <newline-delimited-path-list> \
+  --changed-paths <NUL-v1-path-list> \
+  --changed-paths-format nul-v1 \
   --partition-key <matrix-partition> \
   --partition-keys-json <all-matrix-partitions> \
   --axiom-rules-engine-path <rules-engine-checkout>
 ```
 
-That audit must enforce both exact same-module activation forms,
+That audit enforces both exact same-module activation forms,
 `{pending: metadata} -> {active: metadata}` and
 `{active: old_metadata, pending: metadata} -> {active: metadata}`, along with
 future expiry at evaluation time, no mixed transition, no other semantic
-change, both waiver/toolchain digest bindings, exact transition path scope, and
-digest-only toolchain mutation from the raw base and head bytes. Callers must
-then repin that encoder commit and this workflow commit together. Before
+change, both waiver/toolchain digest bindings, the authenticated signed-manifest
+generated closure, exact transition path scope, and digest-only toolchain
+mutation from the raw base and head bytes. The exact authorized pre-toolchain
+rulespec-us PR #911 bootstrap remains a narrowly proven migration exception and
+does not enter the core transition path. Callers must repin the final encoder
+commit and this workflow commit together. Before
 relying on the ratchet, each caller must also migrate off
 `validate-rulespec-legacy-pending-safe.yml` and configure its protected branch
 to require the pull request branch to be up to date or to merge through a merge
@@ -125,8 +140,11 @@ intentionally a decrement-only semantic guard: a waiver removal or semantic
 no-op does not use the transition-only two-path and digest-splice restrictions.
 It still cannot add or change any retained active or pending record, the head
 waiver bytes must match the head toolchain digest, and the core audit runs on
-every outcome and every matrix shard. This is an accepted fail-closed design,
-not a transition bypass.
+every non-bootstrap outcome and every matrix shard. For activation, the inline
+guard requires the waiver/toolchain pair, consumed module, and exactly one
+encoding-manifest path; the core supplies the authoritative signature and exact
+generated-closure proof. This is an accepted fail-closed design, not a
+transition bypass.
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved

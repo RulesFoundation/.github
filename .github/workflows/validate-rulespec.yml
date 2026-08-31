@@ -662,6 +662,7 @@ jobs:
         shell: bash
         env:
           AXIOM_ENCODE_SHA: ${{ inputs.axiom-encode-ref }}
+          COMPATIBLE_AXIOM_ENCODE_SHA: ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21
           AXIOM_RULES_ENGINE_SHA: ${{ inputs.axiom-rules-engine-ref }}
           AXIOM_CORPUS_SHA: ${{ inputs.axiom-corpus-ref }}
           RULESPEC_US_SHA: ${{ inputs.rulespec-us-ref }}
@@ -677,6 +678,10 @@ jobs:
               exit 1
             fi
           done
+          if [ "$AXIOM_ENCODE_SHA" != "$COMPATIBLE_AXIOM_ENCODE_SHA" ]; then
+            echo "This workflow revision requires reviewed axiom-encode $COMPATIBLE_AXIOM_ENCODE_SHA (version 0.2.1752); got $AXIOM_ENCODE_SHA" >&2
+            exit 1
+          fi
           # python-version is spliced into many run: blocks; bound it to major.minor
           # so a caller cannot smuggle shell into those steps (fail-open / RCE).
           if [[ ! "$PYTHON_VERSION" =~ ^3\.[0-9]+$ ]]; then
@@ -779,6 +784,10 @@ jobs:
           python -m pip install \
             --target "$RUNNER_TEMP/axiom-verification-site-packages" \
             ./_axiom/axiom-encode
+          test "$(python -c 'import axiom_encode; print(axiom_encode.__version__)')" = "0.2.1752" || {
+            echo "Reviewed immutable-waiver workflow requires axiom-encode 0.2.1752" >&2
+            exit 1
+          }
 
       - name: Verify immutable retired-schema freeze
         shell: bash
@@ -1348,6 +1357,16 @@ jobs:
           MIGRATION_CANDIDATE: ${{ steps.migration_authorization.outputs.candidate }}
         run: |
           set -euo pipefail
+          while IFS= read -r git_environment_name; do
+            unset "$git_environment_name"
+          done < <(compgen -A variable GIT_)
+          export GIT_CONFIG_GLOBAL=/dev/null
+          export GIT_CONFIG_SYSTEM=/dev/null
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_LITERAL_PATHSPECS=1
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_NO_REPLACE_OBJECTS=1
+          export GIT_OPTIONAL_LOCKS=0
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base_ref="${{ github.event.pull_request.base.sha }}"
           elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
@@ -1355,16 +1374,128 @@ jobs:
           else
             base_ref="HEAD~1"
           fi
+          base_commit="$(git rev-parse --verify --end-of-options "${base_ref}^{commit}")" || {
+            echo "ValidationWaiverBaseRefUnreadable: protected base is not a readable commit" >&2
+            exit 1
+          }
+          head_commit="$(git rev-parse --verify --end-of-options "${GITHUB_SHA}^{commit}")" || {
+            echo "ValidationWaiverHeadRefUnreadable: head is not a readable commit" >&2
+            exit 1
+          }
+          if [[ ! "$base_commit" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$head_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "ValidationWaiverCommitIdentity: base and head must freeze to exact SHA-1 commits" >&2
+            exit 1
+          fi
           protected_base="$RUNNER_TEMP/protected-known-validation-gaps.yaml"
           protected_toolchain="$RUNNER_TEMP/protected-toolchain.toml"
-          changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
+          changed_paths="$RUNNER_TEMP/waiver-changed-paths.nul"
+          head_waiver_blob="$RUNNER_TEMP/head-known-validation-gaps.yaml"
+          head_toolchain_blob="$RUNNER_TEMP/head-toolchain.toml"
+
+          # validation-waiver-evidence-materialization-start
+          # materialize-regular-blob-function-start
+          materialize_regular_blob() {
+            python - "$1" "$2" "$3" "$4" "$5" <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          commit, relative, destination, maximum, label = sys.argv[1:]
+          if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+              raise SystemExit(f"{label}: commit identity is malformed")
+          listing = subprocess.run(
+              [
+                  "git",
+                  "ls-tree",
+                  "-l",
+                  "-z",
+                  "--full-tree",
+                  commit,
+                  "--",
+                  relative,
+              ],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          )
+          if listing.returncode != 0:
+              raise SystemExit(f"{label}: cannot inspect protected Git tree")
+          records = [record for record in listing.stdout.split(b"\0") if record]
+          if len(records) != 1:
+              raise SystemExit(f"{label}: expected exactly one Git tree entry")
+          try:
+              metadata, encoded_path = records[0].split(b"\t", 1)
+              mode, kind, object_id, encoded_size = metadata.decode("ascii").split()
+              listed_path = encoded_path.decode("utf-8")
+              size = int(encoded_size)
+          except (UnicodeError, ValueError) as exc:
+              raise SystemExit(f"{label}: malformed Git tree entry") from exc
+          if (
+              listed_path != relative
+              or mode != "100644"
+              or kind != "blob"
+              or re.fullmatch(r"[0-9a-f]{40}", object_id) is None
+          ):
+              raise SystemExit(f"{label}: entry must be one exact 100644 blob")
+          if size < 0 or size > int(maximum):
+              raise SystemExit(f"{label}: blob exceeds the bounded evidence size")
+          blob = subprocess.run(
+              ["git", "cat-file", "blob", object_id],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          )
+          if blob.returncode != 0 or len(blob.stdout) != size:
+              raise SystemExit(f"{label}: cannot read the exact bounded Git blob")
+          flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+          if hasattr(os, "O_NOFOLLOW"):
+              flags |= os.O_NOFOLLOW
+          descriptor = os.open(destination, flags, 0o600)
+          try:
+              with os.fdopen(descriptor, "wb") as output:
+                  output.write(blob.stdout)
+          except BaseException:
+              Path(destination).unlink(missing_ok=True)
+              raise
+          PY
+          }
+          # materialize-regular-blob-function-end
+
+          materialize_regular_blob \
+            "$head_commit" known-validation-gaps.yaml "$head_waiver_blob" 2000000 \
+            "ValidationWaiverHeadEvidence"
+          materialize_regular_blob \
+            "$head_commit" .axiom/toolchain.toml "$head_toolchain_blob" 65536 \
+            "ValidationWaiverHeadToolchainEvidence"
+          cmp -s "$head_waiver_blob" known-validation-gaps.yaml || {
+            echo "ValidationWaiverHeadEvidence: checkout waiver bytes differ from frozen head" >&2
+            exit 1
+          }
+          cmp -s "$head_toolchain_blob" .axiom/toolchain.toml || {
+            echo "ValidationWaiverHeadToolchainEvidence: checkout toolchain bytes differ from frozen head" >&2
+            exit 1
+          }
+          # validation-waiver-evidence-materialization-end
+
+          toolchain_args=(--protected-base-toolchain "$protected_toolchain")
+          run_core_audit=true
           # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
             if [ "$MIGRATION_AUTHORIZED" != "true" ]; then
               echo "ValidationWaiverBootstrapUnauthorized: bootstrap is not bound to an exact protected authorization" >&2
               exit 1
             fi
-            candidate_sha256="$(git show "$MIGRATION_CANDIDATE:known-validation-gaps.yaml" | sha256sum | cut -d ' ' -f 1)"
+            migration_commit="$(git rev-parse --verify --end-of-options "${MIGRATION_CANDIDATE}^{commit}")" || {
+              echo "ValidationWaiverBootstrapCandidateMismatch: authorized candidate is not a readable commit" >&2
+              exit 1
+            }
+            candidate_waiver="$RUNNER_TEMP/bootstrap-candidate-known-validation-gaps.yaml"
+            materialize_regular_blob \
+              "$migration_commit" known-validation-gaps.yaml "$candidate_waiver" 2000000 \
+              "ValidationWaiverBootstrapCandidate"
+            candidate_sha256="$(sha256sum "$candidate_waiver" | cut -d ' ' -f 1)"
             if [ "$candidate_sha256" != "$BOOTSTRAP_SHA256" ]; then
               echo "ValidationWaiverBootstrapCandidateMismatch: candidate waiver hash does not match bootstrap" >&2
               exit 1
@@ -1374,51 +1505,42 @@ jobs:
               echo "ValidationWaiverBootstrapHashMismatch: known-validation-gaps.yaml sha256 $current_sha256 != bootstrap $BOOTSTRAP_SHA256" >&2
               exit 1
             fi
-            cp known-validation-gaps.yaml "$protected_base"
+            cmp -s "$candidate_waiver" "$head_waiver_blob" || {
+              echo "ValidationWaiverBootstrapCandidateMismatch: authorized candidate waiver differs from frozen head" >&2
+              exit 1
+            }
+            base_toolchain_tree="$RUNNER_TEMP/bootstrap-base-toolchain-tree"
+            git ls-tree -z --full-tree "$base_commit" -- .axiom/toolchain.toml > "$base_toolchain_tree" || {
+              echo "ValidationWaiverBaseToolchainUnreadable: failed to inspect protected-base tree" >&2
+              exit 1
+            }
+            if [ -s "$base_toolchain_tree" ]; then
+              echo "ValidationWaiverBootstrapUnauthorized: pre-toolchain bootstrap cannot mask an existing base toolchain" >&2
+              exit 1
+            fi
+            cp "$head_waiver_blob" "$protected_base"
+            toolchain_args=()
+            run_core_audit=false
             echo "Accepted exact rulespec-us PR #911 validation-waiver bootstrap."
           else
-            git show "$base_ref:known-validation-gaps.yaml" > "$protected_base" || {
-              echo "ValidationWaiverBaseMissing: protected base must contain known-validation-gaps.yaml" >&2
-              exit 1
-              }
+            materialize_regular_blob \
+              "$base_commit" known-validation-gaps.yaml "$protected_base" 2000000 \
+              "ValidationWaiverBaseEvidence"
+            materialize_regular_blob \
+              "$base_commit" .axiom/toolchain.toml "$protected_toolchain" 65536 \
+              "ValidationWaiverBaseToolchainEvidence"
           fi
           # waiver-bootstrap-guard-end
           git diff --name-only -z --no-renames --diff-filter=ACMRTD \
-            "$base_ref" "$GITHUB_SHA" | LC_ALL=C tr '\0' '\n' > "$changed_paths"
-          # protected-toolchain-evidence-start
-          toolchain_args=()
-          toolchain_tree_entry="$RUNNER_TEMP/protected-toolchain-tree-entry"
-          if git cat-file -e "$base_ref:.axiom/toolchain.toml" 2>/dev/null; then
-            if ! git show "$base_ref:.axiom/toolchain.toml" > "$protected_toolchain"; then
-              echo "ValidationWaiverBaseToolchainUnreadable: failed to read protected-base .axiom/toolchain.toml" >&2
-              exit 1
-            fi
-            toolchain_args=(--protected-base-toolchain "$protected_toolchain")
-          else
-            if ! git cat-file -e "$base_ref^{commit}" 2>/dev/null; then
-              echo "ValidationWaiverBaseRefUnreadable: protected base is not a readable commit" >&2
-              exit 1
-            fi
-            if ! git ls-tree -z "$base_ref" -- .axiom/toolchain.toml > "$toolchain_tree_entry"; then
-              echo "ValidationWaiverBaseToolchainUnreadable: failed to inspect protected-base tree" >&2
-              exit 1
-            fi
-            if [ -s "$toolchain_tree_entry" ]; then
-              echo "ValidationWaiverBaseToolchainUnreadable: protected-base toolchain entry exists but its object is unreadable" >&2
-              exit 1
-            fi
-            # The exact reviewed rulespec-us PR #911 bootstrap is the only
-            # compatibility state allowed to predate .axiom/toolchain.toml.
-            # Its authorization and candidate/head waiver digests were proven
-            # above; no regular pending or activation transition can enter it.
-            if [ -n "$BOOTSTRAP_SHA256" ] && [ "$MIGRATION_AUTHORIZED" = "true" ]; then
-              rm -f "$protected_toolchain"
-              echo "Accepted missing pre-migration toolchain only for the exact authorized rulespec-us PR #911 bootstrap."
-            else
-              echo "ValidationWaiverBaseToolchainMissing: protected base must contain .axiom/toolchain.toml after migration" >&2
-              exit 1
-            fi
+            "$base_commit" "$head_commit" > "$changed_paths"
+          if [ "$(wc -c < "$changed_paths")" -gt 2000000 ]; then
+            echo "ValidationWaiverChangedPaths: NUL-v1 evidence exceeds 2000000 bytes" >&2
+            exit 1
           fi
+          # protected-toolchain-evidence-start
+          # Non-bootstrap audits always receive the exact bounded 100644 blob
+          # materialized from base_commit. The one authorized pre-toolchain
+          # bootstrap is proven above and never enters the core transition path.
           # protected-toolchain-evidence-end
           # validation-waiver-ratchet-start
           python - \
@@ -1432,6 +1554,7 @@ jobs:
           import re
           import sys
           import tomllib
+          import unicodedata
           from datetime import date, datetime, timezone
           from pathlib import Path
 
@@ -1650,22 +1773,84 @@ jobs:
                       f"{label} expires must be later than the current UTC date {today}",
                   )
 
-          def validate_transition_evidence(phase):
+          def load_changed_paths():
               try:
-                  changed = set(
-                      changed_path.read_text(encoding="utf-8").splitlines()
-                  )
+                  raw = changed_path.read_bytes()
               except (OSError, UnicodeError) as exc:
                   fail(
                       "ValidationWaiverRatchetEvidence",
                       f"cannot read changed-path evidence: {exc}",
                   )
-              if changed != TRANSITION_PATHS:
+              if len(raw) > 2_000_000:
+                  fail(
+                      "ValidationWaiverRatchetEvidence",
+                      "changed-path evidence exceeds 2000000 bytes",
+                  )
+              if raw and not raw.endswith(b"\0"):
+                  fail(
+                      "ValidationWaiverRatchetEvidence",
+                      "changed-path evidence must use NUL-v1 framing",
+                  )
+              changed = set()
+              for index, record in enumerate(raw[:-1].split(b"\0") if raw else [], 1):
+                  if not record:
+                      fail(
+                          "ValidationWaiverRatchetEvidence",
+                          f"changed-path record {index} is empty",
+                      )
+                  try:
+                      value = record.decode("utf-8")
+                  except UnicodeError as exc:
+                      fail(
+                          "ValidationWaiverRatchetEvidence",
+                          f"changed-path record {index} is not UTF-8: {exc}",
+                      )
+                  if (
+                      value != value.strip()
+                      or "\\" in value
+                      or value.startswith("/")
+                      or value.endswith("/")
+                      or any(part in {"", ".", ".."} for part in value.split("/"))
+                      or any(
+                          unicodedata.category(character) in {"Cc", "Cf"}
+                          for character in value
+                      )
+                  ):
+                      fail(
+                          "ValidationWaiverRatchetEvidence",
+                          f"changed-path record {index} is not canonical",
+                      )
+                  if value in changed:
+                      fail(
+                          "ValidationWaiverRatchetEvidence",
+                          f"changed-path evidence repeats {value}",
+                      )
+                  changed.add(value)
+              return changed
+
+          def validate_transition_evidence(phase, module=None):
+              changed = load_changed_paths()
+              if phase == "Pending" and changed != TRANSITION_PATHS:
                   fail(
                       f"ValidationWaiverRatchet{phase}Scope",
-                      f"{phase.lower()} must change exactly "
+                      "pending creation must change exactly "
                       "known-validation-gaps.yaml and .axiom/toolchain.toml",
                   )
+              if phase == "Activation":
+                  required = TRANSITION_PATHS | {module}
+                  manifests = {
+                      path
+                      for path in changed
+                      if path.startswith(".axiom/encoding-manifests/")
+                      and path.endswith(".json")
+                  }
+                  if not required <= changed or len(manifests) != 1:
+                      fail(
+                          "ValidationWaiverRatchetActivationScope",
+                          "activation must include the waiver/toolchain pair, the "
+                          "consumed module, and exactly one changed encoding manifest; "
+                          "the core audit authenticates the manifest-induced closure",
+                      )
               base_toolchain_bytes, base_toolchain = load_toolchain(
                   base_toolchain_path,
                   "protected-base .axiom/toolchain.toml",
@@ -1785,7 +1970,7 @@ jobs:
                       "activation must set active to the exact protected-base pending "
                       "record, consume pending, and preserve every other state",
                   )
-              validate_transition_evidence("Activation")
+              validate_transition_evidence("Activation", module)
           else:
               growth = []
               for module, head_states in head_entries.items():
@@ -1806,20 +1991,25 @@ jobs:
           )
           PY
           # validation-waiver-ratchet-end
-          /opt/axiom-verification/axiom-encode-signing-supervisor \
-            --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
-            --trusted-python-runtime-root /opt/axiom-verification/python \
-            --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
-            --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
-            -- /opt/axiom-verification/axiom-encode validation-waivers audit \
-            --root "$GITHUB_WORKSPACE" \
-            --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
-            --protected-base "$protected_base" \
-            "${toolchain_args[@]}" \
-            --changed-paths "$changed_paths" \
-            --partition-key "${{ matrix.shard }}" \
-            --partition-keys-json '${{ needs.shards.outputs.matrix }}' \
-            --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
+          if [ "$run_core_audit" = "true" ]; then
+            /opt/axiom-verification/axiom-encode-signing-supervisor \
+              --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
+              --trusted-python-runtime-root /opt/axiom-verification/python \
+              --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
+              --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
+              -- /opt/axiom-verification/axiom-encode validation-waivers audit \
+              --root "$GITHUB_WORKSPACE" \
+              --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
+              --protected-base "$protected_base" \
+              "${toolchain_args[@]}" \
+              --changed-paths "$changed_paths" \
+              --changed-paths-format nul-v1 \
+              --partition-key "${{ matrix.shard }}" \
+              --partition-keys-json '${{ needs.shards.outputs.matrix }}' \
+              --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
+          else
+            echo "Skipped core transition audit only for the exact authorized pre-toolchain rulespec-us PR #911 bootstrap."
+          fi
 
       - name: Reject manual RuleSpec changes
         if: ${{ inputs.run-generated-guard && matrix.shard == needs.shards.outputs.first }}

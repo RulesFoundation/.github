@@ -2,13 +2,13 @@
 
 ## State
 
-- Branch: `fix/1558-waiver-transition-workflow`; follow-up work started from exact clean tracked HEAD `86cfa854715676d3f844f7b61a2c0701edeb550b`, nine commits ahead of and zero behind `origin/main` at `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is the exact merge base. The only initial untracked handoff files were the expected `PR_BODY.md` and `WORKER-REPORT.md`, and both are being preserved.
+- Branch: `fix/1558-waiver-transition-workflow`, rebased onto live `origin/main` at `e973d1563cdb22c09c82f7fd0a262fb642b2750c`. The only untracked handoff files remain the expected `PR_BODY.md` and `WORKER-REPORT.md`, and both are preserved.
 - The served-model-attested second Fable review of frozen head `86cfa854715676d3f844f7b61a2c0701edeb550b` approved it as a draft only, confirmed F1-F5 resolved, and identified clear follow-ups: N1 pending-only module activation is currently a fail-closed dead end, N2 is an unused attacker-influenced environment value, and exact tests are missing for activation batches and pending-only cross-module replacement. N3 remains an explicitly accepted fail-closed shrink/no-op design unless direct analysis finds a bypass.
-- A fresh live `git fetch origin --prune` and `gh pr view 107` succeeded on 2026-08-31. Live `origin/main` remains `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`; PR #107 remains open, draft, clean/mergeable, and green at the prior published head `86cfa854715676d3f844f7b61a2c0701edeb550b` while this follow-up is finalized locally.
+- A fresh live remote-ref and `gh pr view 107` check succeeded on 2026-08-31. Live `origin/main` is `e973d1563cdb22c09c82f7fd0a262fb642b2750c`; PR #107 remains open, draft, clean/mergeable, and green at the prior published head `3e7976cc2aaab4e3e712285814e335493187a950` while this rebased follow-up is finalized locally.
 - Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its useful workflow/test and handoff bytes were preserved; its generated Python cache was removed and never committed.
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
-- No reviewed compatible immutable axiom-encode core pin has been certified for this rollout; no work-in-progress core head will be invented, pinned, or advertised as compatible here.
-- Rollout remains **BLOCKED** until a reviewed compatible core implementation has an immutable commit SHA; no core pin will be invented or taken from uncommitted work.
+- The workflow is reconciled to axiom-encode core candidate `ef7ecd0c0bff53f6d9340f8e4c100cf5ef8b6b21`, version `0.2.1752`, stacked directly after optional-inventory PR #1566. This exact candidate is reviewable but not yet on the protected default branch.
+- Rollout remains **BLOCKED** until #1566 and the reviewed compatible core land, the workflow's exact core pin is reverified against the final protected-branch SHA, and callers repin both artifacts together.
 - This run uses the user-specified normal Standard service tier, `gpt-5.6-sol`, ultra reasoning, and no `--fast`.
 
 ## Done
@@ -39,14 +39,18 @@
 - Added exact extracted-source regressions for valid pending-only activation, a two-module activation batch spanning both supported activation forms, and pending creation that tries to replace a pending-only module on another path.
 - Re-audited N3: decrement-only shrink/no-op still cannot add or mutate a retained active or pending record, the head waiver bytes remain digest-bound, and the independent core audit still runs on every matrix shard. This remains the documented accepted fail-closed design.
 - Re-ran both workflow self-tests, changed-workflow `actionlint`, Ruff, all-workflow YAML parsing, external-cache Python compilation, the exact workflow self-test after compilation, and final whitespace checks successfully after the follow-up changes.
+- Rebased the draft onto live main `e973d156`, preserving both untracked handoff files and isolating the workflow diff from the automated lane-registry update.
+- Replaced newline path transport with bounded NUL-v1 bytes and the mandatory `--changed-paths-format nul-v1` core interface.
+- Froze event base/head refs to exact commits after removing every ambient `GIT_*` variable and restoring a minimal read-only Git environment; materialized base and head waiver/toolchain evidence only from bounded exact `100644 blob` objects; compared live head bytes with the frozen head; and added poisoned-routing, missing, corrupt-object, executable, symlink, and ref-movement regressions.
+- Kept pending creation at the exact waiver/toolchain pair. Activation now requires the pair, consumed module, and exactly one encoding-manifest path inline, while the pinned core authenticates the signed v5 manifest and exact generated-file closure. Both pending-only and active-plus-pending forms remain supported; waiver/toolchain-only activation now fails.
+- Pinned this workflow candidate to core `ef7ecd0c...` / `0.2.1752`, retained the exact authorized pre-toolchain PR #911 bootstrap outside the core transition path, and passed the updated extracted-source workflow self-test, legacy coverage self-test, changed-workflow `actionlint`, and Ruff lint.
 
 ## Next
 
-- Commit the coherent N1/N2 follow-up, verify the actual commit message, and non-force push the same branch.
-- Update draft PR #107's body and verify its exact live base/head/draft/CI state, then freeze that exact head for another served-model Fable review.
-- Keep rollout explicitly **BLOCKED** on the reviewed compatible core SHA, coordinated repins, branch protection or merge queue, and legacy-workflow migration. Do not invent or advertise a work-in-progress core pin, and do not merge or roll out this draft.
+- Complete static/workflow checks, commit and verify the reconciled head, force-with-lease the already-rebased draft branch only against its verified prior remote head, then obtain new exact-head served-model Fable adjudications for both compatible heads.
+- Keep rollout explicitly **BLOCKED** on #1566, the core merge/final SHA, coordinated caller repins, branch protection or merge queue, and legacy-workflow migration. Do not merge, sign, or roll out this draft.
 
 ## Known baseline-only check noise
 
 - Whole-repository `actionlint` reports two pre-existing `SC2129` style findings in untouched `.github/workflows/validate-rulespec-legacy-pending-safe.yml`; the changed workflow passes `actionlint` alone.
-- `ruff format --check scripts` would reformat all three pre-existing scripts, including four untouched lines in the modified workflow test. `ruff check scripts` passes, and no unrelated formatting rewrite was made.
+- `ruff format --check scripts` would reformat the two untouched pre-existing scripts. The modified workflow test is formatted, `ruff check scripts` passes, and no unrelated formatting rewrite was made.
