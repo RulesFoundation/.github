@@ -84,10 +84,35 @@ bind their exact waiver bytes, and the digest value must be the toolchain's only
 byte change. A later pull request may activate only the exact, unexpired pending
 record already present on the protected base and must consume that pending
 state. All other new or broadened waivers are rejected; entries may otherwise
-only be removed. Callers must repin this workflow and an encoder revision that
-supports `--protected-base-toolchain` together. A toolchain or caller-workflow
-change runs full RuleSpec validation so a release or waiver-set change cannot
-hide behind changed-file selection.
+only be removed.
+
+Do not roll out this transition protocol until a reviewed, immutable
+`axiom-encode` commit independently re-proves the same raw protected-base
+evidence through this exact interface (all flags are required and unknown or
+missing flags must fail):
+
+```text
+validation-waivers audit \
+  --root <rules-repository> \
+  --corpus-path <corpus-checkout> \
+  --protected-base <raw-base-known-validation-gaps.yaml> \
+  --protected-base-toolchain <raw-base-.axiom/toolchain.toml> \
+  --changed-paths <newline-delimited-path-list> \
+  --partition-key <matrix-partition> \
+  --partition-keys-json <all-matrix-partitions> \
+  --axiom-rules-engine-path <rules-engine-checkout>
+```
+
+That audit must enforce exact same-module pending consumption, future expiry at
+evaluation time, no mixed transition, both waiver/toolchain digest bindings,
+and exact activation path scope from the raw base bytes. Callers must then repin
+that encoder commit and this workflow commit together. Before relying on the
+ratchet, each caller must also migrate off
+`validate-rulespec-legacy-pending-safe.yml` and configure its protected branch
+to require the pull request branch to be up to date or to merge through a merge
+queue; otherwise an event-time base SHA can become stale before merge. A
+toolchain or caller-workflow change runs full RuleSpec validation so a release
+or waiver-set change cannot hide behind changed-file selection.
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved
