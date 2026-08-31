@@ -92,6 +92,7 @@ def test_validation_waiver_base_evidence_uses_one_event_ref() -> None:
     assert 'git show "$base_ref:known-validation-gaps.yaml"' in audit_step
     assert 'git show "$base_ref:.axiom/toolchain.toml"' in audit_step
     assert '"$base_ref" "$GITHUB_SHA"' in audit_step
+    assert "HEAD_COMMIT_MESSAGE" not in audit_step
 
 
 def validation_waiver_ratchet_source() -> str:
@@ -604,6 +605,58 @@ def test_validation_waiver_ratchet_preserves_exact_pending_consumption() -> None
     assert result.returncode == 0, result.stderr
 
 
+def test_validation_waiver_ratchet_admits_pending_only_activation() -> None:
+    pending = waiver_metadata("b")
+    base = {
+        "validate_failures": {"us/statutes/1.yaml": {"pending": pending}}
+    }
+    head = {"validate_failures": {"us/statutes/1.yaml": {"active": pending}}}
+    with tempfile.TemporaryDirectory() as directory:
+        result = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=head,
+            changed=[
+                "known-validation-gaps.yaml",
+                ".axiom/toolchain.toml",
+            ],
+        )
+    assert result.returncode == 0, result.stderr
+
+
+def test_validation_waiver_ratchet_rejects_activation_batches() -> None:
+    active = waiver_metadata("a")
+    first_pending = waiver_metadata("b")
+    second_pending = waiver_metadata("c")
+    base = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"pending": first_pending},
+            "us/statutes/2.yaml": {
+                "active": active,
+                "pending": second_pending,
+            },
+        }
+    }
+    head = {
+        "validate_failures": {
+            "us/statutes/1.yaml": {"active": first_pending},
+            "us/statutes/2.yaml": {"active": second_pending},
+        }
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        result = run_validation_waiver_ratchet(
+            Path(directory),
+            base=base,
+            head=head,
+            changed=[
+                "known-validation-gaps.yaml",
+                ".axiom/toolchain.toml",
+            ],
+        )
+    assert result.returncode != 0
+    assert "ActivationBatch" in result.stderr
+
+
 def test_validation_waiver_ratchet_rejects_cross_module_composites() -> None:
     active = waiver_metadata("a")
     old_pending = waiver_metadata("b")
@@ -633,6 +686,27 @@ def test_validation_waiver_ratchet_rejects_cross_module_composites() -> None:
         )
         assert replacement.returncode != 0
         assert "PendingComposite" in replacement.stderr
+
+        pending_only_replacement = run_validation_waiver_ratchet(
+            root,
+            base={
+                "validate_failures": {
+                    "us/statutes/1.yaml": {"pending": old_pending},
+                    "us/statutes/2.yaml": {"active": active},
+                }
+            },
+            head={
+                "validate_failures": {
+                    "us/statutes/2.yaml": {
+                        "active": active,
+                        "pending": new_pending,
+                    }
+                }
+            },
+            changed=changed,
+        )
+        assert pending_only_replacement.returncode != 0
+        assert "PendingComposite" in pending_only_replacement.stderr
 
         mixed = run_validation_waiver_ratchet(
             root,
@@ -1262,6 +1336,8 @@ def main() -> None:
     test_validation_waiver_ratchet_rejects_pending_batches_and_direct_active()
     test_validation_waiver_ratchet_rejects_pending_replacement_and_retention()
     test_validation_waiver_ratchet_preserves_exact_pending_consumption()
+    test_validation_waiver_ratchet_admits_pending_only_activation()
+    test_validation_waiver_ratchet_rejects_activation_batches()
     test_validation_waiver_ratchet_rejects_cross_module_composites()
     test_validation_waiver_ratchet_rejects_removals_during_creation()
     test_validation_waiver_activation_rejects_unrelated_removals()

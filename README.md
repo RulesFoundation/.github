@@ -81,10 +81,13 @@ audit compares it with the protected base revision. One new `pending` approval
 is permitted only in a pull request that changes exactly
 `known-validation-gaps.yaml` and `.axiom/toolchain.toml`; both revisions must
 bind their exact waiver bytes, and the digest value must be the toolchain's only
-byte change. A later pull request may activate only the exact, unexpired pending
-record already present on the protected base and must consume that pending
-state. All other new or broadened waivers are rejected; entries may otherwise
-only be removed.
+byte change. The new pending field may approve a module that has no existing
+waiver entry, producing a pending-only module. A later pull request may consume
+the exact, unexpired pending record into active on that same module, either
+initializing a pending-only module or replacing its existing active state. The
+pending state must be removed and every other module and state preserved. All
+other new or broadened waivers are rejected; entries may otherwise only be
+removed.
 
 Do not roll out this transition protocol until a reviewed, immutable
 `axiom-encode` commit independently re-proves the same raw protected-base
@@ -103,16 +106,27 @@ validation-waivers audit \
   --axiom-rules-engine-path <rules-engine-checkout>
 ```
 
-That audit must enforce exact same-module pending consumption, future expiry at
-evaluation time, no mixed transition, both waiver/toolchain digest bindings,
-and exact activation path scope from the raw base bytes. Callers must then repin
-that encoder commit and this workflow commit together. Before relying on the
-ratchet, each caller must also migrate off
+That audit must enforce both exact same-module activation forms,
+`{pending: metadata} -> {active: metadata}` and
+`{active: old_metadata, pending: metadata} -> {active: metadata}`, along with
+future expiry at evaluation time, no mixed transition, no other semantic
+change, both waiver/toolchain digest bindings, exact transition path scope, and
+digest-only toolchain mutation from the raw base and head bytes. Callers must
+then repin that encoder commit and this workflow commit together. Before
+relying on the ratchet, each caller must also migrate off
 `validate-rulespec-legacy-pending-safe.yml` and configure its protected branch
 to require the pull request branch to be up to date or to merge through a merge
 queue; otherwise an event-time base SHA can become stale before merge. A
 toolchain or caller-workflow change runs full RuleSpec validation so a release
 or waiver-set change cannot hide behind changed-file selection.
+
+Outside one exact pending creation or activation, the inline ratchet is
+intentionally a decrement-only semantic guard: a waiver removal or semantic
+no-op does not use the transition-only two-path and digest-splice restrictions.
+It still cannot add or change any retained active or pending record, the head
+waiver bytes must match the head toolchain digest, and the core audit runs on
+every outcome and every matrix shard. This is an accepted fail-closed design,
+not a transition bypass.
 
 The workflow rejects singular rule roots, separate parameter or test fixture
 files, YAML fixtures under `tests/`, non-RuleSpec YAML outside the approved

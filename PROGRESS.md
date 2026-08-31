@@ -2,12 +2,12 @@
 
 ## State
 
-- Branch: `fix/1558-waiver-transition-workflow`; follow-up work started from exact clean tracked HEAD `86cfa854715676d3f844f7b61a2c0701edeb550b`, nine commits ahead of and zero behind the local `origin/main` snapshot `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is the exact merge base. The only initial untracked files were the expected `PR_BODY.md` and `WORKER-REPORT.md`, and both are being preserved.
+- Branch: `fix/1558-waiver-transition-workflow`; follow-up work started from exact clean tracked HEAD `86cfa854715676d3f844f7b61a2c0701edeb550b`, nine commits ahead of and zero behind `origin/main` at `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is the exact merge base. The only initial untracked handoff files were the expected `PR_BODY.md` and `WORKER-REPORT.md`, and both are being preserved.
 - The served-model-attested second Fable review of frozen head `86cfa854715676d3f844f7b61a2c0701edeb550b` approved it as a draft only, confirmed F1-F5 resolved, and identified clear follow-ups: N1 pending-only module activation is currently a fail-closed dead end, N2 is an unused attacker-influenced environment value, and exact tests are missing for activation batches and pending-only cross-module replacement. N3 remains an explicitly accepted fail-closed shrink/no-op design unless direct analysis finds a bypass.
-- A fresh live `git fetch --all --prune --tags` and `gh pr view 107` were attempted before edits on 2026-08-31 and failed because DNS could not resolve GitHub; `gh auth status` also reports the configured token invalid. `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a` is therefore still the newest local remote-tracking snapshot, not a newly certified live tip. No remote state will be claimed without a successful live observation.
+- A fresh live `git fetch origin --prune` and `gh pr view 107` succeeded on 2026-08-31. Live `origin/main` remains `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`; PR #107 remains open, draft, clean/mergeable, and green at the prior published head `86cfa854715676d3f844f7b61a2c0701edeb550b` while this follow-up is finalized locally.
 - Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its useful workflow/test and handoff bytes were preserved; its generated Python cache was removed and never committed.
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
-- The sibling axiom-encode implementation is still uncommitted; its current `cca60e84` head is progress-only and is not a compatible core pin.
+- No reviewed compatible immutable axiom-encode core pin has been certified for this rollout; no work-in-progress core head will be invented, pinned, or advertised as compatible here.
 - Rollout remains **BLOCKED** until a reviewed compatible core implementation has an immutable commit SHA; no core pin will be invented or taken from uncommitted work.
 - This run uses the user-specified normal Standard service tier, `gpt-5.6-sol`, ultra reasoning, and no `--fast`.
 
@@ -34,13 +34,17 @@
 - Documented the exact eventual core audit interface and independent reproof obligations, coordinated immutable repins, required up-to-date branch protection or merge queue, and mandatory migration off `validate-rulespec-legacy-pending-safe.yml`.
 - Passed the complete post-rebase gate: both workflow self-tests, changed-workflow `actionlint`, `ruff check scripts`, all four workflow YAML parses, Python compilation for every script using an external temporary cache, both `git diff --check` forms, and a repository cache-artifact check.
 - Re-inspected the exact requested head, upstream tracking and divergence, merge base, commit subjects, expected untracked handoff files, applicable `/Users/maxghenis/AGENTS.md`, full second Fable adjudication, README/core contract, PR body, worker report, and branch diff before making follow-up changes.
+- Extended activation to consume an exact pending-only protected-base module into its exact active form, using the same expiry, raw waiver/toolchain evidence, exact path scope, digest-only toolchain mutation, and no-other-semantic-change proof as active-plus-pending rotation.
+- Removed the unused attacker-influenced `HEAD_COMMIT_MESSAGE` environment value and added an exact-source assertion that it stays absent.
+- Added exact extracted-source regressions for valid pending-only activation, a two-module activation batch spanning both supported activation forms, and pending creation that tries to replace a pending-only module on another path.
+- Re-audited N3: decrement-only shrink/no-op still cannot add or mutate a retained active or pending record, the head waiver bytes remain digest-bound, and the independent core audit still runs on every matrix shard. This remains the documented accepted fail-closed design.
+- Re-ran both workflow self-tests, changed-workflow `actionlint`, Ruff, all-workflow YAML parsing, external-cache Python compilation, the exact workflow self-test after compilation, and final whitespace checks successfully after the follow-up changes.
 
 ## Next
 
-- Implement and document the coherent N1 contract: creation may approve a new module with only `pending`, and later exact pending-only activation consumes `{pending: metadata}` into `{active: metadata}` under the same strict future-expiry, raw-evidence, path-scope, digest-only, and no-other-semantic-change proof used for active-plus-pending rotation.
-- Remove N2's unused `HEAD_COMMIT_MESSAGE` environment value; add exact extracted-source coverage for valid pending-only activation, activation-batch rejection, and cross-module replacement where the removed module is pending-only; directly re-audit N3.
-- Run the full requested local gate and independent shell/YAML/Git/injection review, update `PR_BODY.md` and `WORKER-REPORT.md`, and keep rollout explicitly **BLOCKED** on the reviewed compatible core SHA, coordinated repins, branch protection or merge queue, and legacy-workflow migration. Never advertise `cca60e8420596d4aeaf55b8e5a9b872f32958238` as compatible.
-- Restore GitHub DNS and valid `gh` authentication, fetch/reconcile the live base if necessary, non-force push the same branch, update draft PR #107, and verify exact live base/head/draft/CI state without merging or rolling out.
+- Commit the coherent N1/N2 follow-up, verify the actual commit message, and non-force push the same branch.
+- Update draft PR #107's body and verify its exact live base/head/draft/CI state, then freeze that exact head for another served-model Fable review.
+- Keep rollout explicitly **BLOCKED** on the reviewed compatible core SHA, coordinated repins, branch protection or merge queue, and legacy-workflow migration. Do not invent or advertise a work-in-progress core pin, and do not merge or roll out this draft.
 
 ## Known baseline-only check noise
 

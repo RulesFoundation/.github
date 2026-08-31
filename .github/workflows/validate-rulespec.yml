@@ -1344,7 +1344,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           MIGRATION_AUTHORIZED: ${{ steps.migration_authorization.outputs.authorized }}
           MIGRATION_CANDIDATE: ${{ steps.migration_authorization.outputs.candidate }}
         run: |
@@ -1730,7 +1729,7 @@ jobs:
           activations = [
               (module, base_states["pending"])
               for module, base_states in base_entries.items()
-              if set(base_states) == {"active", "pending"}
+              if set(base_states) in ({"pending"}, {"active", "pending"})
               and module in head_entries
               and "pending" not in head_entries[module]
               and exact_semantic_equal(
@@ -1783,8 +1782,8 @@ jobs:
               if not exact_semantic_equal(head_entries, expected_head):
                   fail(
                       "ValidationWaiverRatchetActivationComposite",
-                      "activation must replace active with the exact protected-base "
-                      "pending record, consume pending, and preserve every other state",
+                      "activation must set active to the exact protected-base pending "
+                      "record, consume pending, and preserve every other state",
                   )
               validate_transition_evidence("Activation")
           else:
