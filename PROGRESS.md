@@ -2,11 +2,12 @@
 
 ## State
 
-- Branch: `fix/1558-waiver-transition-workflow`; implementation committed as `da539a85e478a52fc87da50dccf6b528a09c59bf` after the progress baseline `b786f77b077703ae97ecc70d565a74b1cbc73737`.
-- The narrow reusable-workflow implementation and its adversarial self-tests are complete and reviewed.
-- The last locally fetched `origin/main` is the same commit, fetched 2026-08-30 12:55 EDT; a live refresh was attempted but is currently blocked by sandbox DNS (`github.com` cannot be resolved).
+- Branch: `fix/1558-waiver-transition-workflow`; frozen review head `585d57a111ac06a398850861b1195f1cb788d80e` is based on cached `origin/main` and merge base `847217fe551238bfccfcd48c02e59edc4fe3a0e4`.
+- The served-model-attested Fable review of that exact head returned `REQUEST_CHANGES` with five implementation blockers (F1-F5); remediation is in progress.
+- The last locally fetched `origin/main` is `847217fe551238bfccfcd48c02e59edc4fe3a0e4`, fetched 2026-08-30 12:55 EDT; a live refresh was previously blocked by sandbox DNS (`github.com` could not be resolved).
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
 - The sibling axiom-encode implementation is still uncommitted; its current `cca60e84` head is progress-only and is not a compatible core pin.
+- Rollout remains **BLOCKED** until a reviewed compatible core implementation has an immutable commit SHA; no core pin will be invented or taken from uncommitted work.
 
 ## Done
 
@@ -21,13 +22,16 @@
 - Passed the repository's second workflow self-test (`scripts/test_legacy_oracle_coverage_workflow.py`), `ruff check scripts`, changed-workflow `actionlint`, all-workflow YAML parsing, and a repeated full waiver/authorization self-test.
 - Completed raw-diff and independent security reviews with no actionable findings. The attempted GitNexus graph review indexed locally but could not register/query because sandbox policy forbids writing its global registry; its generated index was removed.
 - Repeated the live `origin/main` fetch after review; DNS remains unavailable, so the cached `847217fe551238bfccfcd48c02e59edc4fe3a0e4` base cannot yet be re-certified as current.
+- Re-inspected the applicable `/Users/maxghenis/AGENTS.md`, repository status and instructions, exact frozen head, cached base/merge base, complete base diff, and the untracked `PR_BODY.md` and `WORKER-REPORT.md` without modifying or discarding them.
+- Read the complete `/private/tmp/fable-review-waiver-workflow-out.md` attestation and accepted F1-F5: activation needs independent inline expiry/state/scope/raw-evidence proof; creation needs exact-superset semantics; protected-base toolchain retrieval must fail closed; metadata types/expiry need inline validation; and exact regressions are required for every listed attack.
 
 ## Next
 
-- Obtain the terminal axiom-encode core implementation SHA; do not advertise the incompatible progress-only `cca60e84` SHA.
-- Restore GitHub DNS/authentication, fetch and compare live `origin/main`, and integrate any new base commits without discarding this branch.
-- Finalize `WORKER-REPORT.md` and the prepared PR text with this branch's terminal commit SHA.
-- Push, open a linked draft PR, and verify its actual title, body, draft state, and head SHA without merging.
+- Implement F1-F4 in the exact embedded workflow heredoc, including fail-closed protected-base toolchain retrieval with a narrow documented pre-migration compatibility condition.
+- Add exact embedded-source self-tests for every Fable F5 attack while preserving all existing creation and authorization coverage.
+- Document caller up-to-date-base/merge-queue protection, migration off the legacy pending-safe workflow, and the eventual core audit interface; make both handoff files honestly `BLOCKED` on a reviewed compatible core pin.
+- Run the full workflow self-tests, changed-workflow `actionlint`, Ruff, Python compilation, all-workflow YAML parsing, and `git diff --check`; commit each coherent step and verify actual commit messages.
+- If every local and remote precondition is green, fetch/reconcile, push, and open or update only a draft PR; verify its actual title/body/draft/head state and do not merge.
 
 ## Known baseline-only check noise
 
