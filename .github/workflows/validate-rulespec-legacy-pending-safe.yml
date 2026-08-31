@@ -578,7 +578,6 @@ jobs:
           PY
 
       - name: Checkout protected-base axiom-encode
-        if: ${{ inputs.run-generated-guard }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: TheAxiomFoundation/axiom-encode
@@ -588,7 +587,6 @@ jobs:
           persist-credentials: false
 
       - name: Authenticate protected-base axiom-encode
-        if: ${{ inputs.run-generated-guard }}
         shell: bash
         env:
           SELECTED_REF: ${{ steps.toolchain.outputs.axiom_encode_ref }}
@@ -614,7 +612,6 @@ jobs:
           }
 
       - name: Install protected-base axiom-encode
-        if: ${{ inputs.run-generated-guard }}
         working-directory: _axiom/guard-axiom-encode
         run: uv sync --locked --no-dev
 
@@ -635,6 +632,24 @@ jobs:
             --base-ref "$BASE_REF" \
             --head-ref "$GITHUB_SHA" \
             --roots "$VALIDATE_ROOTS"
+
+      # Deliberately unconditional, unlike the guard above. That guard asks
+      # whether a *changed* file has *a* matching attestation, so one good
+      # record satisfies it and any other record committed alongside is never
+      # read — which is how 121 attestations on rulespec-us went stale with CI
+      # green, one of them for four weeks (axiom-encode#1282). This step asks
+      # the question an outside auditor would ask, over every manifest tree in
+      # the repository, and no caller input disables it: a corpus that
+      # advertises tamper-evidence cannot make that check opt-in. It needs no
+      # signing key — it hashes files and compares bytes.
+      - name: Verify every committed encoding manifest matches its file
+        working-directory: _axiom/guard-axiom-encode
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/axiom-encode manifest-audit \
+            --repo "$GITHUB_WORKSPACE" \
+            --limit 50
 
       - name: Report disabled generated guard
         if: ${{ ! inputs.run-generated-guard }}

@@ -1466,6 +1466,32 @@ jobs:
             --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
             --expected-encoder-checkout "$GITHUB_WORKSPACE/_axiom/axiom-encode"
 
+      # Deliberately unconditional. The step above asks whether a *changed*
+      # file has *a* matching attestation, so one good record satisfies it and
+      # any other record committed alongside is never read — which is how 121
+      # attestations on rulespec-us went stale with CI green, one of them for
+      # four weeks (axiom-encode#1282). This step asks the question an outside
+      # auditor would ask, over every manifest tree in the repository, and it
+      # carries no caller input to disable: a corpus that advertises
+      # tamper-evidence cannot make that check opt-in. A superseded claim
+      # that cannot be deleted without destroying a still-true sibling claim
+      # is retired in place via .axiom/retired-manifest-claims.yaml: an entry
+      # is a reviewed exception bound to one exact claim, it verifies nothing,
+      # and an entry whose claim stops existing fails here.
+      - name: Verify every committed encoding manifest matches its file
+        if: ${{ matrix.shard == needs.shards.outputs.first }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          /opt/axiom-verification/axiom-encode-signing-supervisor \
+            --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
+            --trusted-python-runtime-root /opt/axiom-verification/python \
+            --trusted-python-import-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages \
+            --trusted-python-package-root /opt/axiom-verification/python/lib/python${{ inputs.python-version }}/site-packages/axiom_encode \
+            -- /opt/axiom-verification/axiom-encode manifest-audit \
+            --repo "$GITHUB_WORKSPACE" \
+            --limit 50
+
       - name: Select RuleSpec validation targets
         id: validation_targets
         shell: bash
