@@ -2,8 +2,8 @@
 
 ## State
 
-- Branch: `fix/1558-waiver-transition-workflow`; implementation HEAD `7e1bbdcdd8da3b3992b5c372a57eb61068cd4f53` is six commits ahead of and zero behind the local `origin/main` snapshot `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is now the exact merge base.
-- The served-model-attested Fable review of frozen head `585d57a111ac06a398850861b1195f1cb788d80e` returned `REQUEST_CHANGES` with five implementation blockers (F1-F5). The inline remediation and extracted-source adversarial coverage are now committed and locally green; documentation and final verification remain.
+- Branch: `fix/1558-waiver-transition-workflow`; verified documentation HEAD `00585de36d2aeb39bbc7cd6811484a10db12927f` is eight commits ahead of and zero behind the local `origin/main` snapshot `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`, which is the exact merge base.
+- The served-model-attested Fable review of frozen head `585d57a111ac06a398850861b1195f1cb788d80e` returned `REQUEST_CHANGES` with five implementation blockers (F1-F5). The inline remediation, exact extracted-source adversarial coverage, rollout documentation, and complete local verification are now green and ready to freeze for a second Fable review.
 - A live `git fetch --all --prune --tags` was attempted first on 2026-08-31 and failed because sandbox DNS could not resolve `github.com`; `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a` is therefore the newest local remote-tracking snapshot, not a newly certified live tip.
 - Salvage ref `refs/codex-salvage/fix-1558-waiver-transition-workflow-20260830-212607-42656` points to `9f9d6a22e609c8f07129672ac90565e3e653d87c`. Its useful workflow/test and handoff bytes were preserved; its generated Python cache was removed and never committed.
 - Scope is the reusable-workflow half of axiom-encode issue 1558 only.
@@ -31,12 +31,14 @@
 - Added exact attacks for cross-module replacement, mixed creation/activation, isolated unrelated removals in both phases, strict/type/real/future expiry failures, activation scope, missing/corrupt/unreadable Git toolchain evidence, base/head waiver and toolchain raw-byte/digest mutations, and the exact authorized PR #911 pre-toolchain bootstrap composition.
 - Rebased all six branch commits onto `7dcdf2c5f46ee2a5d38e8f3c176eba52099a6a5a`; the only tree difference from the pre-rebase implementation is that upstream's isolated `LANES.md` registry update is now present.
 - Completed independent inline-security and test-coverage audits with no remaining F1-F5 finding.
+- Documented the exact eventual core audit interface and independent reproof obligations, coordinated immutable repins, required up-to-date branch protection or merge queue, and mandatory migration off `validate-rulespec-legacy-pending-safe.yml`.
+- Passed the complete post-rebase gate: both workflow self-tests, changed-workflow `actionlint`, `ruff check scripts`, all four workflow YAML parses, Python compilation for every script using an external temporary cache, both `git diff --check` forms, and a repository cache-artifact check.
 
 ## Next
 
-- Document caller up-to-date-base/merge-queue protection, migration off the legacy pending-safe workflow, and the eventual core audit interface; make both handoff files honestly `BLOCKED` on a reviewed compatible core pin.
-- Run the complete post-rebase workflow self-tests, changed-workflow `actionlint`, Ruff, Python compilation without retaining caches, all-workflow YAML parsing, and `git diff --check`; commit verification state and read back actual commit messages.
-- If every local and remote precondition is green, fetch/reconcile, push, and open or update only a draft PR; verify its actual title/body/draft/head state and do not merge.
+- Keep `PR_BODY.md` and `WORKER-REPORT.md` explicitly **BLOCKED** on a reviewed compatible core SHA and the caller protection/migration rollout; never advertise `cca60e8420596d4aeaf55b8e5a9b872f32958238` as compatible.
+- Freeze the final local head for a second Fable review.
+- Restore GitHub DNS and valid `gh` authentication, fetch/reconcile the live base, push, and open or update only a draft PR; verify its actual title/body/draft/base/head state and do not merge.
 
 ## Known baseline-only check noise
 
