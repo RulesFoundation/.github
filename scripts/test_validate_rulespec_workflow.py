@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -39,6 +40,128 @@ def authorization_source() -> str:
     source = block[len(marker) :]
     source = source.rsplit("\nPY", 1)[0]
     return textwrap.dedent(source)
+
+
+def waiver_ratchet_source() -> str:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("# waiver-ratchet-python-start")
+    end = workflow.index("# waiver-ratchet-python-end")
+    block = textwrap.dedent(workflow[start:end].split("\n", 1)[1])
+    marker = "<<'PY'\n"
+    assert marker in block
+    source = block.split(marker, 1)[1]
+    source = source.rsplit("\nPY", 1)[0]
+    return textwrap.dedent(source)
+
+
+def test_pending_waiver_requires_exact_digest_only_toolchain_companion() -> None:
+    metadata = (
+        'fingerprint: "sha256:' + "a" * 64 + '"\n'
+        '      owner: "@owner"\n'
+        '      issue: "https://github.com/TheAxiomFoundation/repo/issues/1"\n'
+        '      expires: "2026-10-01"\n'
+    )
+    base_waiver = (
+        "validate_failures:\n"
+        "  us/statutes/1.yaml:\n"
+        "    active:\n      "
+        + metadata
+    ).encode()
+    head_waiver = base_waiver + b"    pending:\n      " + metadata.encode()
+    base_digest = hashlib.sha256(base_waiver).hexdigest()
+    head_digest = hashlib.sha256(head_waiver).hexdigest()
+    base_toolchain = (
+        "[toolchain]\n"
+        'axiom_corpus_release = "unchanged"\n'
+        f'validation_waiver_set_sha256 = "{base_digest}"\n'
+    ).encode()
+    head_toolchain = base_toolchain.replace(base_digest.encode(), head_digest.encode())
+
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        paths = {
+            "base_waiver": root / "base.yaml",
+            "head_waiver": root / "head.yaml",
+            "base_toolchain": root / "base.toml",
+            "head_toolchain": root / "head.toml",
+            "changed": root / "changed.txt",
+            "audit_changed": root / "audit-changed.txt",
+        }
+        paths["base_waiver"].write_bytes(base_waiver)
+        paths["head_waiver"].write_bytes(head_waiver)
+        paths["base_toolchain"].write_bytes(base_toolchain)
+        paths["head_toolchain"].write_bytes(head_toolchain)
+        paths["changed"].write_text(
+            "known-validation-gaps.yaml\n.axiom/toolchain.toml\n"
+        )
+
+        def run() -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [
+                    "python",
+                    "-c",
+                    waiver_ratchet_source(),
+                    *(str(path) for path in paths.values()),
+                ],
+                capture_output=True,
+                text=True,
+            )
+
+        assert run().returncode == 0
+        assert paths["audit_changed"].read_text() == "known-validation-gaps.yaml\n"
+
+        paths["head_toolchain"].write_bytes(
+            head_toolchain.replace(b'"unchanged"', b'"changed"')
+        )
+        assert run().returncode != 0
+        paths["head_toolchain"].write_bytes(head_toolchain)
+
+        paths["changed"].write_text("known-validation-gaps.yaml\n")
+        assert run().returncode != 0
+
+        paths["changed"].write_text(
+            "known-validation-gaps.yaml\n.axiom/toolchain.toml\nus/statutes/1.yaml\n"
+        )
+        assert run().returncode != 0
+
+        # A newly introduced module can be preapproved, but still only through
+        # the same exact two-file transition.
+        new_base_waiver = b"validate_failures: {}\n"
+        new_head_waiver = (
+            b"validate_failures:\n  us/statutes/1.yaml:\n    pending:\n      "
+            + metadata.encode()
+        )
+        new_base_digest = hashlib.sha256(new_base_waiver).hexdigest()
+        new_head_digest = hashlib.sha256(new_head_waiver).hexdigest()
+        new_base_toolchain = base_toolchain.replace(
+            base_digest.encode(), new_base_digest.encode()
+        )
+        new_head_toolchain = new_base_toolchain.replace(
+            new_base_digest.encode(), new_head_digest.encode()
+        )
+        paths["base_waiver"].write_bytes(new_base_waiver)
+        paths["head_waiver"].write_bytes(new_head_waiver)
+        paths["base_toolchain"].write_bytes(new_base_toolchain)
+        paths["head_toolchain"].write_bytes(new_head_toolchain)
+        paths["changed"].write_text(
+            "known-validation-gaps.yaml\n.axiom/toolchain.toml\n"
+        )
+        assert run().returncode == 0
+
+        # Bootstrap mode authenticates the exact head candidate as its own
+        # protected comparison baseline; the ratchet must accept that identity.
+        paths["base_waiver"].write_bytes(new_head_waiver)
+        paths["base_toolchain"].write_bytes(new_head_toolchain)
+        assert run().returncode == 0
+
+
+def test_waiver_bootstrap_uses_authenticated_head_toolchain() -> None:
+    workflow = WORKFLOW.read_text()
+    start = workflow.index("      - name: Enforce validation waiver ratchet")
+    end = workflow.index("      - name: Reject manual RuleSpec changes")
+    audit_step = workflow[start:end]
+    assert 'if [ -n "$BOOTSTRAP_SHA256" ]; then' in audit_step
+    assert 'cp .axiom/toolchain.toml "$protected_base_toolchain"' in audit_step
 
 
 def test_retired_schema_freeze_classifies_only_plural_citations() -> None:
@@ -214,6 +337,8 @@ def test_conflicted_merge_is_rejected() -> None:
 
 def main() -> None:
     test_parallel_validation_workers_are_bounded_and_fail_closed()
+    test_pending_waiver_requires_exact_digest_only_toolchain_companion()
+    test_waiver_bootstrap_uses_authenticated_head_toolchain()
     temp, root, base, topic = fixture()
     try:
         ordinary = run_authorization(

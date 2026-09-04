@@ -1357,7 +1357,9 @@ jobs:
             base_ref="HEAD~1"
           fi
           protected_base="$RUNNER_TEMP/protected-known-validation-gaps.yaml"
+          protected_base_toolchain="$RUNNER_TEMP/protected-toolchain.toml"
           changed_paths="$RUNNER_TEMP/waiver-changed-paths.txt"
+          audit_changed_paths="$RUNNER_TEMP/waiver-audit-changed-paths.txt"
           # waiver-bootstrap-guard-start
           if [ -n "$BOOTSTRAP_SHA256" ]; then
             if [ "$MIGRATION_AUTHORIZED" != "true" ]; then
@@ -1385,13 +1387,37 @@ jobs:
           # waiver-bootstrap-guard-end
           git diff --name-only -z --no-renames --diff-filter=ACMRTD \
             "$base_ref" "$GITHUB_SHA" | LC_ALL=C tr '\0' '\n' > "$changed_paths"
-          python - "$protected_base" known-validation-gaps.yaml <<'PY'
+          if [ -n "$BOOTSTRAP_SHA256" ]; then
+            # The exact reviewed migration candidate is already authenticated
+            # above and its waiver ledger is the protected comparison base.
+            # Its historical parent may predate the toolchain pin entirely.
+            cp .axiom/toolchain.toml "$protected_base_toolchain"
+          else
+            git show "$base_ref:.axiom/toolchain.toml" > "$protected_base_toolchain" || {
+              echo "ValidationWaiverBaseToolchainMissing: protected base must contain .axiom/toolchain.toml" >&2
+              exit 1
+            }
+          fi
+          # waiver-ratchet-python-start
+          python - "$protected_base" known-validation-gaps.yaml \
+            "$protected_base_toolchain" .axiom/toolchain.toml "$changed_paths" \
+            "$audit_changed_paths" <<'PY'
+          import hashlib
+          import re
           import sys
           from pathlib import Path
 
           import yaml
 
-          base_path, head_path = map(Path, sys.argv[1:])
+          (
+              base_path,
+              head_path,
+              base_toolchain_path,
+              head_toolchain_path,
+              changed_path,
+              audit_changed_path,
+          ) = map(Path, sys.argv[1:])
+          changed_paths = frozenset(changed_path.read_text().splitlines())
           base = yaml.safe_load(base_path.read_bytes())
           head = yaml.safe_load(head_path.read_bytes())
           base_entries = base.get("validate_failures", {}) if isinstance(base, dict) else {}
@@ -1400,10 +1426,48 @@ jobs:
               raise SystemExit(
                   "ValidationWaiverRatchetSchema: validate_failures must be a mapping"
               )
+          pin_companion_verified = False
+          companion_paths = frozenset(
+              {"known-validation-gaps.yaml", ".axiom/toolchain.toml"}
+          )
+          if companion_paths <= changed_paths:
+              pin_pattern = re.compile(
+                  rb'(?m)^validation_waiver_set_sha256 = "(?P<digest>[0-9a-f]{64})"$'
+              )
+              base_toolchain = base_toolchain_path.read_bytes()
+              head_toolchain = head_toolchain_path.read_bytes()
+              base_matches = list(pin_pattern.finditer(base_toolchain))
+              head_matches = list(pin_pattern.finditer(head_toolchain))
+              base_digest = hashlib.sha256(base_path.read_bytes()).hexdigest().encode()
+              head_digest = hashlib.sha256(head_path.read_bytes()).hexdigest().encode()
+              if (
+                  len(base_matches) != 1
+                  or len(head_matches) != 1
+                  or base_matches[0].group("digest") != base_digest
+                  or head_matches[0].group("digest") != head_digest
+              ):
+                  raise SystemExit(
+                      "ValidationWaiverPinCompanionMismatch: waiver ledger digest pin is not exact"
+                  )
+              expected_head_toolchain = (
+                  base_toolchain[: base_matches[0].start("digest")]
+                  + head_digest
+                  + base_toolchain[base_matches[0].end("digest") :]
+              )
+              if head_toolchain != expected_head_toolchain:
+                  raise SystemExit(
+                      "ValidationWaiverPinCompanionScope: toolchain companion may change only the waiver-set digest"
+                  )
+              pin_companion_verified = True
           growth = []
           for module, head_states in head_entries.items():
               base_states = base_entries.get(module)
-              if not isinstance(head_states, dict) or not isinstance(base_states, dict):
+              if not isinstance(head_states, dict):
+                  growth.append(str(module))
+                  continue
+              if base_states is None:
+                  base_states = {}
+              elif not isinstance(base_states, dict):
                   growth.append(str(module))
                   continue
               for state, metadata in head_states.items():
@@ -1415,17 +1479,34 @@ jobs:
                       # supervised audit still enforces the full protocol
                       # (exact consumption, expiry, waiver-only approvals).
                       continue
+                  if (
+                      state == "pending"
+                      and pin_companion_verified
+                      and changed_paths == companion_paths
+                  ):
+                      # Pending approvals never waive a failure. Their only
+                      # allowed growth path is a dedicated PR whose sole
+                      # companion change re-pins this exact ledger byte set.
+                      continue
                   growth.append(f"{module}:{state}")
           if growth:
               raise SystemExit(
                   "ValidationWaiverRatchetGrowth: waivers may only shrink; "
                   "new, changed, or broadened records: " + ", ".join(sorted(growth))
               )
+          if pin_companion_verified and changed_paths == companion_paths:
+              # The exact digest-only toolchain edit carries no independent
+              # authorization semantics; the signed audit still receives and
+              # enforces the substantive waiver-only transition.
+              audit_changed_path.write_text("known-validation-gaps.yaml\n")
+          else:
+              audit_changed_path.write_bytes(changed_path.read_bytes())
           print(
               "Validation waiver ratchet is decrement-only: "
               f"{len(base_entries)} base module(s) -> {len(head_entries)} head module(s)."
           )
           PY
+          # waiver-ratchet-python-end
           /opt/axiom-verification/axiom-encode-signing-supervisor \
             --trusted-signing-roots /opt/axiom-verification/signing-trust-roots.json \
             --trusted-python-runtime-root /opt/axiom-verification/python \
@@ -1435,7 +1516,7 @@ jobs:
             --root "$GITHUB_WORKSPACE" \
             --corpus-path "$GITHUB_WORKSPACE/_axiom/axiom-corpus" \
             --protected-base "$protected_base" \
-            --changed-paths "$changed_paths" \
+            --changed-paths "$audit_changed_paths" \
             --partition-key "${{ matrix.shard }}" \
             --partition-keys-json '${{ needs.shards.outputs.matrix }}' \
             --axiom-rules-engine-path "$GITHUB_WORKSPACE/_axiom/axiom-rules-engine"
