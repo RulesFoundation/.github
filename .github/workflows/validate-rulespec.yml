@@ -253,14 +253,17 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
-          # Roots that hold encoded RuleSpec modules. The first four are
-          # axiom-encode's own RULESPEC_SOURCE_ROOTS; `legislation` is not, but
-          # it is one of the jurisdiction markers `validate-roots: auto`
-          # discovers, so it is guarded here rather than left as a hole.
-          ROOTS = {"statutes", "regulations", "policies", "legislation", "programs"}
+          # Roots that hold encoded RuleSpec modules: exactly axiom-encode's
+          # RULESPEC_SOURCE_ROOTS, the default `--roots` of the supervised
+          # `guard-generated` step. `legislation/` is deliberately NOT here:
+          # the supervised guard does not protect it, and this pre-check must
+          # reject a strict subset of what that guard rejects.
+          ROOTS = {"statutes", "regulations", "policies", "programs"}
           # Jurisdiction directory of a country monorepo (us/, us-co/, tz-znz/,
-          # uk-ashford/), matching axiom-encode's protected-path pattern.
-          JURISDICTION = re.compile(r"[a-z]{2}(?:-[a-z0-9_-]+)*")
+          # uk-ashford/): byte-identical to axiom-encode's
+          # `_protected_rulespec_root_index` pattern, so a name that classifier
+          # rejects (e.g. `uk--x`) is not guarded here either.
+          JURISDICTION = re.compile(r"[a-z]{2}(?:-[a-z0-9_]+)*")
           MANIFEST_DIR = ".axiom/encoding-manifests"
           MANIFEST_PARTS = MANIFEST_DIR.split("/")
           # axiom-encode records a removed module with this marker in place of
