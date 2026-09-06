@@ -199,6 +199,237 @@ jobs:
               raise SystemExit(1)
           '
 
+      - name: Reject unmanifested RuleSpec content
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_GENERATED_GUARD: ${{ inputs.run-generated-guard }}
+        run: |
+          set -euo pipefail
+          # Fail closed on hand-authored RuleSpec BEFORE any toolchain
+          # resolution. The supervised `Reject manual RuleSpec changes` step is
+          # still the authoritative guard, but it lives in the validate job
+          # after `Resolve RuleSpec toolchain`, which hard-fails when
+          # `.axiom/toolchain.toml` is missing; on an unpinned repository the
+          # only red is "toolchain" and the content violation never surfaces.
+          # This step runs in the first job, before any of that, and it is also
+          # where `run-generated-guard: false` stops being a free opt-out.
+          if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            if git rev-parse --verify "$GITHUB_SHA^" >/dev/null 2>&1; then
+              BASE_SHA="$(git rev-parse "$GITHUB_SHA^")"
+            else
+              BASE_SHA=""
+            fi
+          fi
+          if [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            SCAN_MODE="diff"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            # A push with no resolvable base is a root commit: there is no
+            # parent to diff against, so the tracked tree is the change set.
+            # Branch-creation pushes resolve `$GITHUB_SHA^` above and diff.
+            SCAN_MODE="tree"
+          else
+            # schedule / workflow_dispatch / workflow_run: no change set to
+            # judge here. The supervised guard still runs in the validate job.
+            SCAN_MODE="none"
+          fi
+          export BASE_SHA SCAN_MODE
+          python3 <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          # Roots that hold encoded RuleSpec modules. `legislation` is not one
+          # of the encoder's own roots but is one of the jurisdiction markers
+          # `validate-roots: auto` discovers, so it is guarded here too.
+          ROOTS = {"statutes", "regulations", "policies", "legislation", "programs"}
+          # Jurisdiction directory of a country monorepo (us/, us-co/, tz-znz/,
+          # uk-ashford/): the union of the shard-discovery pattern used below
+          # and the encoder's own protected-path pattern (which permits "_").
+          JURISDICTION = re.compile(r"[a-z]{2}(?:-[a-z0-9_-]+)*")
+          MANIFEST_DIR = ".axiom/encoding-manifests"
+          EXCEPTION_PATH = ".axiom/generated-guard-exception.md"
+          EXCEPTION_URL = re.compile(
+              r"https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+"
+              r"/(?:issues|pull)/[0-9]+/?"
+          )
+          EXCEPTION_EXPIRES = re.compile(r"expires:[ \t]*([0-9]{4}-[0-9]{2}-[0-9]{2})")
+          REMEDY = (
+              "RuleSpec content must come from `axiom-encode encode --apply` "
+              "(encoding regime); hand-authored modules are rejected before "
+              "toolchain resolution."
+          )
+          EXCEPTION_CONTRACT = (
+              f"{EXCEPTION_PATH} must carry the authorizing issue or "
+              "pull-request URL on line 1 and `expires: YYYY-MM-DD` (a date "
+              "that is not in the past, UTC) on line 2."
+          )
+
+
+          def fail(*lines: str) -> None:
+              for line in lines:
+                  print(line, file=sys.stderr)
+              raise SystemExit(1)
+
+
+          def git(*args: str) -> list[str]:
+              completed = subprocess.run(
+                  ["git", *args], stdout=subprocess.PIPE, check=True
+              )
+              return [
+                  os.fsdecode(entry)
+                  for entry in completed.stdout.split(b"\0")
+                  if entry
+              ]
+
+
+          def guarded(path: str) -> bool:
+              if not path.endswith((".yaml", ".yml")):
+                  return False
+              if path.endswith((".test.yaml", ".test.yml")):
+                  return False
+              if "/composed/" in path:
+                  # Composition pipelines are assembled from encoded modules,
+                  # not encoded; the supervised guard still covers them.
+                  return False
+              parts = path.split("/")
+              if len(parts) >= 2 and parts[0] in ROOTS:
+                  return True
+              return (
+                  len(parts) >= 3
+                  and parts[1] in ROOTS
+                  and JURISDICTION.fullmatch(parts[0]) is not None
+              )
+
+
+          def manifest_candidates(path: str) -> list[str]:
+              stem = path.rsplit(".", 1)[0]
+              candidates = [f"{MANIFEST_DIR}/{stem}.json"]
+              parts = path.split("/")
+              if len(parts) >= 3 and parts[1] in ROOTS:
+                  # `encode --apply` co-locates the manifest under the
+                  # jurisdiction content root when that subtree's layout gate
+                  # permits .json, and relocates it to the checkout-root mirror
+                  # above when it does not (axiom-encode#1078). Accept both.
+                  inner = "/".join(parts[1:]).rsplit(".", 1)[0]
+                  candidates.append(f"{parts[0]}/{MANIFEST_DIR}/{inner}.json")
+              return candidates
+
+
+          tracked = set(git("ls-files", "-z"))
+          guard_input = os.environ.get("RUN_GENERATED_GUARD", "true").strip().lower()
+          if guard_input not in {"true", "false"}:
+              fail(f"run-generated-guard must be true or false, got {guard_input!r}")
+
+          if guard_input == "false":
+              if EXCEPTION_PATH not in tracked:
+                  fail(
+                      "run-generated-guard=false without "
+                      ".axiom/generated-guard-exception.md",
+                      "",
+                      "Disabling the generated-content guard is a reviewed, "
+                      "time-boxed migration decision, not a repository "
+                      "setting. Commit the exception file or set "
+                      "run-generated-guard: true.",
+                      EXCEPTION_CONTRACT,
+                      REMEDY,
+                  )
+              try:
+                  raw = Path(EXCEPTION_PATH).read_text(encoding="utf-8")
+              except (OSError, UnicodeDecodeError) as error:
+                  fail(f"{EXCEPTION_PATH} is not readable UTF-8: {error}")
+              lines = raw.splitlines()
+              if len(lines) < 2:
+                  fail(f"{EXCEPTION_PATH} has fewer than two lines", EXCEPTION_CONTRACT)
+              if EXCEPTION_URL.fullmatch(lines[0].strip()) is None:
+                  fail(
+                      f"{EXCEPTION_PATH} line 1 is not a GitHub issue or "
+                      f"pull-request URL: {lines[0].strip()!r}",
+                      EXCEPTION_CONTRACT,
+                  )
+              expires_match = EXCEPTION_EXPIRES.fullmatch(lines[1].strip())
+              if expires_match is None:
+                  fail(
+                      f"{EXCEPTION_PATH} line 2 is not "
+                      f"`expires: YYYY-MM-DD`: {lines[1].strip()!r}",
+                      EXCEPTION_CONTRACT,
+                  )
+              try:
+                  expires = datetime.strptime(
+                      expires_match.group(1), "%Y-%m-%d"
+                  ).date()
+              except ValueError:
+                  fail(
+                      f"{EXCEPTION_PATH} line 2 is not a real calendar date: "
+                      f"{expires_match.group(1)}"
+                  )
+              today = datetime.now(timezone.utc).date()
+              if expires < today:
+                  fail(
+                      f"{EXCEPTION_PATH} expired on {expires.isoformat()} "
+                      f"(today is {today.isoformat()} UTC); renew the "
+                      "authorization or set run-generated-guard: true.",
+                      REMEDY,
+                  )
+              print(
+                  "run-generated-guard=false honored under "
+                  f"{lines[0].strip()} (expires {expires.isoformat()})."
+              )
+              raise SystemExit(0)
+
+          scan_mode = os.environ["SCAN_MODE"]
+          if scan_mode == "none":
+              print(
+                  "No resolvable change set for event "
+                  f"{os.environ.get('EVENT_NAME', 'unknown')!r}; the supervised "
+                  "guard in the validate job remains authoritative."
+              )
+              raise SystemExit(0)
+          if scan_mode == "tree":
+              changed = sorted(tracked)
+          else:
+              changed = git(
+                  "diff",
+                  "--name-only",
+                  "-z",
+                  "--no-renames",
+                  "--diff-filter=ACMRT",
+                  os.environ["BASE_SHA"],
+                  os.environ["GITHUB_SHA"],
+              )
+
+          guarded_paths = [path for path in changed if guarded(path)]
+          offending = [
+              path
+              for path in guarded_paths
+              if not any(
+                  candidate in tracked for candidate in manifest_candidates(path)
+              )
+          ]
+          if offending:
+              print(
+                  "Unmanifested RuleSpec content "
+                  f"({len(offending)} of {len(guarded_paths)} guarded files):",
+                  file=sys.stderr,
+              )
+              for path in sorted(offending):
+                  expected = manifest_candidates(path)[0]
+                  print(
+                      f"  {path} has no tracked encoder apply manifest "
+                      f"({expected})",
+                      file=sys.stderr,
+                  )
+              fail("", REMEDY)
+          print(
+              f"{len(guarded_paths)} guarded RuleSpec file(s) in scope "
+              f"(scan={scan_mode}); every one carries an encoder apply manifest."
+          )
+          PY
+
       - name: Compute validation shards
         id: compute
         shell: bash
